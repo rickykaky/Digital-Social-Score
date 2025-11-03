@@ -5,7 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 
-client = TestClient(app)
+# Create client that properly handles lifespan
+client = TestClient(app, raise_server_exceptions=True)
 
 
 def test_root_endpoint():

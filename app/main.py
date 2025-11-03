@@ -106,7 +106,15 @@ async def analyze_text(request: TextAnalysisRequest):
     Returns a score from 0 (non-toxic) to 100 (highly toxic).
     Complies with GDPR by not storing personal data.
     """
+    global toxicity_detector, gdpr_handler
+    
     try:
+        # Initialize if not already done (for testing)
+        if toxicity_detector is None:
+            toxicity_detector = ToxicityDetector()
+        if gdpr_handler is None:
+            gdpr_handler = GDPRHandler()
+        
         # GDPR compliance: generate anonymized ID
         text_hash = gdpr_handler.anonymize_text(request.text)
         

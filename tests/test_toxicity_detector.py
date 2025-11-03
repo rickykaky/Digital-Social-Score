@@ -14,7 +14,7 @@ def detector():
 def test_detector_initialization(detector):
     """Test that detector initializes properly."""
     assert detector is not None
-    assert detector.classifier is not None
+    assert detector.model_loaded is True
 
 
 def test_analyze_returns_dict(detector):
