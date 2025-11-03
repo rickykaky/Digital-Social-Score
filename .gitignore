@@ -205,3 +205,24 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Digital Social Score specific
+# Data files (keep directory structure but not the actual data)
+data/raw/*.csv
+data/raw/*.json
+data/raw/*.txt
+data/processed/*.csv
+data/processed/*.json
+data/processed/*.txt
+data/anonymized/*.csv
+data/anonymized/*.json
+data/anonymized/*.txt
+
+# Keep .gitkeep files to maintain directory structure
+!data/**/.gitkeep
+
+# Logs
+logs/*.log
+
+# Local environment
+.env
