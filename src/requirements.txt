@@ -1,0 +1,10 @@
+pandas
+numpy
+scikit-learn
+nltk
+fastapi
+uvicorn[standard]
+joblib
+# spaCy is more robust for NER, but the user's code uses NLTK's NE chunker.
+# We will stick to the user's NLTK approach for consistency, but keep the option open.
+# If NLTK NE chunking proves insufficient, spaCy will be added.
