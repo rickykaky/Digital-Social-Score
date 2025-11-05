@@ -119,7 +119,7 @@ def calculate_score(text: str) -> int:
     # 5. Conversion en score (0 à 100)
     # Score = 100 * (1 - Probabilité de Toxicité)
     # Plus la probabilité de toxicité est faible, plus le score est élevé.
-    score = int(100 * (1 - prob_toxic))
+    score = int(100 * (prob_toxic))
     
     return max(0, min(100, score)) # Assurer que le score est entre 0 et 100
 
@@ -136,7 +136,8 @@ def get_social_score(payload: TextPayload):
     
     return {
         "text_received": payload.text,
-        "social_score": score,
+        "text_anonymized": anonymize_text(payload.text),
+        "toxicity_score": score,
         "model_used": "LogisticRegression_TFIDF",
         "rgpd_compliant": True
     }
