@@ -23,4 +23,4 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
 
 # Commande de démarrage de l'API avec Gunicorn (pour la gestion des workers)
 # Gunicorn utilise la configuration dans gunicorn_conf.py
-CMD ["gunicorn", "app:app", "--config", "gunicorn_conf.py"]
+#CMD ["gunicorn", "app:app", "--config", "gunicorn_conf.py"]
