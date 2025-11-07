@@ -1,0 +1,18 @@
+# Ignorer les fichiers et dossiers non nécessaires pour l'image finale
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+*.log
+*.csv
+*.tsv
+train.csv
+train.py
+# Fichiers de notebooks
+*.ipynb
+# Fichiers de test
+tests/
+# Fichiers de documentation
+*.md

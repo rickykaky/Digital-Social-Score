@@ -1,0 +1,13 @@
+# service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: social-score-service
+spec:
+  selector:
+    app: social-score-api
+  type: LoadBalancer # Crée un Load Balancer GCP avec une IP publique
+  ports:
+    - protocol: TCP
+      port: 80 # Port externe (accessible par l'utilisateur)
+      targetPort: 8080 # Port interne du conteneur (celui de Gunicorn)

@@ -1,0 +1,14 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "build",
+        "-t",
+        "us-west1-docker.pkg.dev/digital-social-score/digital-social-score/social-score-api-bert:1.0.0",
+        "-f",
+        "src/BERT_API/Dockerfile_bert",
+        "."
+      ]
+
+images:
+  - "us-west1-docker.pkg.dev/digital-social-score/digital-social-score/social-score-api-bert:1.0.0"

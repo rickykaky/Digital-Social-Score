@@ -1,0 +1,13 @@
+pandas
+numpy
+scikit-learn
+nltk
+fastapi
+uvicorn[standard]
+joblib
+aiohttp
+#transformers
+#tensorflow
+
+# Optional (but recommended for production logs & stability)
+python-dotenv

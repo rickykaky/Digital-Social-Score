@@ -1,0 +1,56 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: social-score-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    kubernetes.io/ingress.global-static-ip-name: "social-score-ip"
+    networking.gke.io/managed-certificates: "social-score-cert"
+    kubernetes.io/ingress.allow-http: "false"
+spec:
+  rules:
+  - host: "social-score.example.com"
+    http:
+      paths:
+      - path: "/*"
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: social-score-service
+            port:
+              number: 80
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: social-score-cert
+  namespace: default
+spec:
+  domains:
+  - social-score.example.com
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: social-score-backend-config
+  namespace: default
+spec:
+  sessionAffinity:
+    affinityType: "CLIENT_IP"
+  connectionDraining:
+    drainingTimeoutSec: 60
+  timeoutSec: 30
+  customRequestHeaders:
+    headers:
+    - "X-Client-Region:{client_region}"
+  customResponseHeaders:
+    headers:
+    - "X-Cache-Status:{cdn_cache_status}"
+  healthChecks:
+  - name: social-score-health-check
+  iap:
+    enabled: false
+  sessionAffinity:
+    affinityType: "CLIENT_IP"
+    affinityCookieTtlSec: 3600
