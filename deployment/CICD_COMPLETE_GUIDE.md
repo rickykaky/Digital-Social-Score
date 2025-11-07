@@ -49,80 +49,80 @@ Production Ready
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │                      GitHub Repository                         │
-│  ┌──────────────────────────────────────────────────────────┐ │
-│  │  Branches:                                                │ │
-│  │  - main          (production)                            │ │
-│  │  - develop       (staging)                               │ │
-│  │  - feature/*     (development)                           │ │
-│  └──────────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Branches:                                               │  │
+│  │  - main          (production)                            │  │
+│  │  - develop       (staging)                               │  │
+│  │  - feature/*     (development)                           │  │
+│  └──────────────────────────────────────────────────────────┘  │
 │                           │                                    │
 │                           ▼                                    │
-│                    GitHub Actions                             │
-│                   (Local CI Checks)                           │
-│                   - Unit Tests                                │
-│                   - Lint & Format                             │
-│                   - Type Checks                               │
-│                   - Security Scan                             │
+│                    GitHub Actions                              │
+│                   (Local CI Checks)                            │
+│                   - Unit Tests                                 │
+│                   - Lint & Format                              │
+│                   - Type Checks                                │
+│                   - Security Scan                              │
 └────────────────────────────────────────────────────────────────┘
                            │
                            ▼
 ┌────────────────────────────────────────────────────────────────┐
 │              Google Cloud Build                                │
-│  ┌──────────────────────────────────────────────────────────┐ │
-│  │  Triggers:                                                │ │
-│  │  - Push to main   → Deploy to production                 │ │
-│  │  - Push to develop → Deploy to staging                   │ │
-│  │  - Tag release-* → Create release build                  │ │
-│  └──────────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Triggers:                                               │  │
+│  │  - Push to main   → Deploy to production                 │  │
+│  │  - Push to develop → Deploy to staging                   │  │
+│  │  - Tag release-* → Create release build                  │  │
+│  └──────────────────────────────────────────────────────────┘  │
 │                                                                │
-│  ┌──────────────────────────────────────────────────────────┐ │
-│  │  Steps:                                                   │ │
-│  │  1. Run pytest (tests/)                                   │ │
-│  │  2. Compile KFP pipeline                                 │ │
-│  │  3. Build Docker image                                   │ │
-│  │  4. Push to Artifact Registry                            │ │
-│  │  5. Deploy to GKE                                        │ │
-│  │  6. Verify rollout                                       │ │
-│  └──────────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Steps:                                                  │  │
+│  │  1. Run pytest (tests/)                                  │  │
+│  │  2. Compile KFP pipeline                                 │  │
+│  │  3. Build Docker image                                   │  │
+│  │  4. Push to Artifact Registry                            │  │
+│  │  5. Deploy to GKE                                        │  │
+│  │  6. Verify rollout                                       │  │
+│  └──────────────────────────────────────────────────────────┘  │
 └────────────────────────────────────────────────────────────────┘
                            │
                            ▼
 ┌────────────────────────────────────────────────────────────────┐
-│              Google Cloud Infrastructure                        │
-│  ┌──────────────────────────────────────────────────────────┐ │
-│  │  Artifact Registry                                        │ │
-│  │  social-score-api:latest                                │ │
-│  │  social-score-api:v1.2.3                                │ │
-│  │  social-score-api:prod-abc123                           │ │
-│  └──────────────────────────────────────────────────────────┘ │
+│              Google Cloud Infrastructure                       │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Artifact Registry                                       │  │
+│  │  social-score-api:latest                                 │  │
+│  │  social-score-api:v1.2.3                                 │  │
+│  │  social-score-api:prod-abc123                            │  │
+│  └──────────────────────────────────────────────────────────┘  │
 │                                                                │
-│  ┌──────────────────────────────────────────────────────────┐ │
-│  │  GKE Cluster (Production)                                 │ │
-│  │  Deployments → Services → Ingress → Load Balancer       │ │
-│  └──────────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  GKE Cluster (Production)                                │  │
+│  │  Deployments → Services → Ingress → Load Balancer        │  │
+│  └──────────────────────────────────────────────────────────┘  │
 │                                                                │
-│  ┌──────────────────────────────────────────────────────────┐ │
-│  │  Vertex AI Pipelines                                      │ │
-│  │  - ML model training                                      │ │
-│  │  - Data preparation                                       │ │
-│  │  - Model evaluation                                       │ │
-│  └──────────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Vertex AI Pipelines                                     │  │
+│  │  - ML model training                                     │  │
+│  │  - Data preparation                                      │  │
+│  │  - Model evaluation                                      │  │
+│  └──────────────────────────────────────────────────────────┘  │
 │                                                                │
-│  ┌──────────────────────────────────────────────────────────┐ │
-│  │  Cloud Storage (GCS)                                      │ │
-│  │  - Pipeline templates                                     │ │
-│  │  - Build artifacts                                        │ │
-│  │  - Logs                                                   │ │
-│  └──────────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Cloud Storage (GCS)                                     │  │
+│  │  - Pipeline templates                                    │  │
+│  │  - Build artifacts                                       │  │
+│  │  - Logs                                                  │  │
+│  └──────────────────────────────────────────────────────────┘  │
 └────────────────────────────────────────────────────────────────┘
                            │
                            ▼
 ┌────────────────────────────────────────────────────────────────┐
 │         Monitoring & Alertes                                   │
-│  - Cloud Logging                                              │
-│  - Cloud Monitoring                                           │
-│  - Prometheus / Grafana                                       │
-│  - Cloud Trace                                                │
+│  - Cloud Logging                                               │
+│  - Cloud Monitoring                                            │
+│  - Prometheus / Grafana                                        │
+│  - Cloud Trace                                                 │
 └────────────────────────────────────────────────────────────────┘
 ```
 

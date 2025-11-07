@@ -283,7 +283,7 @@ class TestPipelineOrchestration:
     @patch('src.submit_pipeline.aiplatform.PipelineJob')
     def test_pipeline_submission(self, mock_pipeline_job):
         """Le pipeline doit pouvoir être soumis à Vertex AI"""
-        from src.submit_pipeline import run_vertex_pipeline
+        from submit_vertex_pipeline import run_vertex_pipeline
         
         # Mock de la soumission
         mock_job = MagicMock()
