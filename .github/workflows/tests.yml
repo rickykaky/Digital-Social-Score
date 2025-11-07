@@ -263,20 +263,178 @@ jobs:
         path: reports/bandit.json
 
   # ==========================================================================
-  # Job 8: Summary & Status
+  # Job 8: Tests de Charge et Performance (NOUVEAU) ⭐
+  # ==========================================================================
+  performance-tests:
+    name: Load & Performance Tests
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    services:
+      # Service pour héberger l'API lors des tests
+      api:
+        image: ghcr.io/${{ github.repository_owner }}/digital-social-score:latest
+        ports:
+          - 8000:8000
+        options: >-
+          --health-cmd="curl -f http://localhost:8000/health || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-test.txt
+        pip install locust k6 aiohttp
+    
+    - name: Download NLTK data
+      run: |
+        python -m nltk.downloader punkt stopwords wordnet averaged_perceptron_tagger maxent_ne_chunker words
+    
+    - name: Wait for API to be ready
+      run: |
+        python -c "
+        import time
+        import requests
+        for i in range(30):
+          try:
+            requests.get('http://localhost:8000/health')
+            print('✅ API is ready!')
+            exit(0)
+          except:
+            print(f'⏳ Waiting for API... ({i+1}/30)')
+            time.sleep(1)
+        exit(1)
+        "
+    
+    - name: Run load tests (Locust)
+      run: |
+        locust -f test_charge/locustfile.py \
+          --headless \
+          -u 100 \
+          -r 10 \
+          --run-time 5m \
+          --host http://localhost:8000 \
+          --csv=reports/locust_stats \
+          --logfile=reports/locust.log
+    
+    - name: Run performance tests (Custom)
+      run: |
+        pytest test_charge/test.ipynb -v \
+          --tb=short \
+          --junit-xml=reports/junit-performance.xml \
+          -m "not slow"
+    
+    - name: Analyze performance metrics
+      run: |
+        python -c "
+        import json
+        import sys
+        
+        # Lire les métriques de Locust
+        try:
+          with open('reports/locust_stats_stats.csv', 'r') as f:
+            lines = f.readlines()
+            print('\n📊 MÉTRIQUES DE CHARGE:')
+            print('=' * 60)
+            for line in lines[:10]:
+              print(line.strip())
+            
+            # Parser les données
+            for line in lines[1:]:
+              parts = line.split(',')
+              if len(parts) >= 5:
+                endpoint = parts[0]
+                requests = parts[1]
+                failures = parts[2]
+                median = parts[3]
+                p95 = parts[4]
+                print(f'\n🔗 {endpoint}')
+                print(f'   Requêtes: {requests}')
+                print(f'   Latence médiane: {median}ms')
+                print(f'   P95: {p95}ms')
+        except Exception as e:
+          print(f'⚠️  Impossible de lire les métriques: {e}')
+        "
+    
+    - name: Check performance thresholds
+      run: |
+        python -c "
+        import csv
+        
+        # Vérifier les seuils de performance
+        thresholds = {
+          'latency_p95': 1000,  # Max 1s à P95
+          'error_rate': 5,       # Max 5% d'erreurs
+          'rps': 100             # Min 100 req/s
+        }
+        
+        print('\n✅ VÉRIFICATION DES SEUILS DE PERFORMANCE:')
+        print('=' * 60)
+        
+        try:
+          with open('reports/locust_stats_stats.csv', 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+              if row.get('Name') == 'Total':
+                p95 = float(row.get('95%', 0))
+                failures = float(row.get('Failure Rate', 0).rstrip('%'))
+                rps = float(row.get('RPS', 0))
+                
+                print(f'📊 Latence P95: {p95}ms (seuil: {thresholds[\"latency_p95\"]}ms)')
+                print(f'📊 Taux d\'erreur: {failures}% (seuil: {thresholds[\"error_rate\"]}%)')
+                print(f'📊 RPS: {rps} (seuil: {thresholds[\"rps\"]})')
+                
+                if p95 > thresholds['latency_p95']:
+                  print('❌ ERREUR: Latence trop élevée!')
+                  exit(1)
+                if failures > thresholds['error_rate']:
+                  print('❌ ERREUR: Taux d\'erreur trop haut!')
+                  exit(1)
+                if rps < thresholds['rps']:
+                  print('❌ ERREUR: RPS insuffisant!')
+                  exit(1)
+                
+                print('✅ Tous les seuils respectés!')
+        except Exception as e:
+          print(f'⚠️  Impossible de vérifier les seuils: {e}')
+        "
+    
+    - name: Upload performance reports
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: performance-reports
+        path: reports/
+
+  # ==========================================================================
+  # Job 9: Summary & Status
   # ==========================================================================
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [unit-tests, integration-tests, pipeline-tests, coverage, lint, type-check]
+    needs: [unit-tests, integration-tests, pipeline-tests, coverage, lint, type-check, performance-tests]
     if: always()
     
     steps:
     - name: ✅ All Tests Passed
-      if: ${{ needs.unit-tests.result == 'success' && needs.integration-tests.result == 'success' && needs.pipeline-tests.result == 'success' }}
+      if: ${{ needs.unit-tests.result == 'success' && needs.integration-tests.result == 'success' && needs.pipeline-tests.result == 'success' && needs.performance-tests.result == 'success' }}
       run: |
         echo "✅ All tests passed successfully!"
         echo "📊 Coverage: Check the Coverage Report artifact"
+        echo "⚡ Performance: Check the Performance Reports artifact"
     
     - name: ❌ Some Tests Failed
       if: ${{ failure() }}
@@ -285,12 +443,12 @@ jobs:
         exit 1
 
   # ==========================================================================
-  # Job 9: Build Docker Image (si tous les tests passent)
+  # Job 10: Build Docker Image (si tous les tests passent)
   # ==========================================================================
   build-docker:
     name: Build Docker Image
     runs-on: ubuntu-latest
-    needs: [unit-tests, integration-tests, lint]
+    needs: [unit-tests, integration-tests, lint, performance-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.unit-tests.result == 'success'
     
     steps:
