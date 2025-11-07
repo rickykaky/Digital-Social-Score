@@ -2,6 +2,9 @@ import joblib
 import os
 import re
 import nltk
+# Indique à NLTK où chercher les données téléchargées dans le Dockerfile
+nltk.data.path.append("/usr/share/nltk_data")
+import joblib
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from nltk import pos_tag, ne_chunk
@@ -27,8 +30,8 @@ except FileNotFoundError:
 # --- 2. Fonctions de Traitement (Copie de train.py) ---
 
 # Regex patterns for common PII
-EMAIL_RE = re.compile(r'\b[-]+@[-]+\.{2,}', flags=re.IGNORECASE)
-PHONE_RE = re.compile(r'(?:\+?\d{1,3}[.-])?(?:\(?\d{2,4}\)?[.-])?[\d.-]{6,15}')
+EMAIL_RE = re.compile(r'\b[\w\.-]+@[\w\.-]+\.\w{2,}\b', flags=re.IGNORECASE)
+PHONE_RE = re.compile(r'(?:\+?\d{1,3}[\s.-])?(?:\(?\d{2,4}\)?[\s.-])?[\d\s.-]{6,15}')
 CREDIT_RE = re.compile(r'\b(?:\d[ -]*?){13,16}\b')
 DATE_RE = re.compile(r'\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{2,4})\b', flags=re.IGNORECASE)
 AGE_RE = re.compile(r'\b(?:age\s*[:]?\s*\d{1,3}|\d{1,3}\s?(?:years?\sold|yo|y/o|yrs|ans))\b', flags=re.IGNORECASE)

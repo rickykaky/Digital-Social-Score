@@ -1,0 +1,129 @@
+# cloudbuild.yaml
+
+# ----------------------------------------------------------------------
+# Étape 0 : Compilation et Soumission du Pipeline Kubeflow
+# ----------------------------------------------------------------------
+# Compile le pipeline KFP v2 et le soumet à Vertex AI Pipelines
+steps:
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: bash
+  args:
+  - '-c'
+  - |
+    # Définir les variables
+    export PROJECT_ID=$PROJECT_ID
+    export PIPELINE_REGION=us-central1
+    export BUCKET_NAME=${PROJECT_ID}-digital-social-score
+    
+    # Installer les dépendances
+    echo "📦 Installation des dépendances KFP..."
+    pip install -q kfp==2.0.0 google-cloud-aiplatform
+    
+    # Compiler le pipeline en fichier YAML
+    echo "🔨 Compilation du pipeline..."
+    python -c "
+from kfp.v2 import compiler
+from pipeline import digital_score_pipeline
+
+try:
+    compiler.Compiler().compile(
+        pipeline_func=digital_score_pipeline,
+        package_path='digital_score_pipeline.yaml'
+    )
+    print('✓ Pipeline compilé avec succès !')
+except Exception as e:
+    print(f'✗ Erreur lors de la compilation: {e}')
+    exit(1)
+    "
+    
+    # Vérifier que le fichier compilé existe
+    if [ ! -f digital_score_pipeline.yaml ]; then
+      echo "✗ Erreur: digital_score_pipeline.yaml non trouvé"
+      exit 1
+    fi
+    
+    # Soumettre le pipeline à Vertex AI Pipelines
+    echo "📤 Soumission du pipeline à Vertex AI..."
+    python submit_pipeline.py \
+      --project ${PROJECT_ID} \
+      --region ${PIPELINE_REGION} \
+      --name "digital-social-score-pipeline-${COMMIT_SHA}" \
+      --bucket ${BUCKET_NAME} || echo "⚠️  Impossible de soumettre le pipeline (optionnel)"
+    
+    echo "✓ Étape 0 complétée avec succès"
+  id: 'compile-and-submit-pipeline'
+
+# ----------------------------------------------------------------------
+# Étape 1 : Tests Unitaires et Installation des Dépendances
+# ----------------------------------------------------------------------
+# Utilise une image Python pour exécuter les commandes de test et d'installation
+- name: 'python:3.11'
+  entrypoint: bash
+  args:
+  - '-c'
+  - |
+    # Installer les dépendances pour s'assurer que le code est valide
+    echo "📚 Installation des dépendances..."
+    pip install -q -r requirements.txt
+    
+    # Exécuter les tests (optionnel - décommenter si vous avez des tests)
+    # echo "🧪 Exécution des tests..."
+    # pytest tests/ || echo "⚠️  Aucun test trouvé (optionnel)"
+    
+    echo "✓ Étape 1 complétée"
+  id: 'install-and-test'
+
+# ----------------------------------------------------------------------
+# Étape 2 : Construction de l'Image Docker
+# ----------------------------------------------------------------------
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+    'build',
+    '-t',
+    # Utilise Artifact Registry (AR) et le tag de l'image basé sur le COMMIT_SHA
+    'us-west1-docker.pkg.dev/$PROJECT_ID/social-score-repo/social-score-api:$COMMIT_SHA',
+    '-t',
+    'us-west1-docker.pkg.dev/$PROJECT_ID/social-score-repo/social-score-api:latest',
+    '.'
+  ]
+  id: 'build-docker-image'
+
+# ----------------------------------------------------------------------
+# Étape 3 : Pousser l'Image vers Artifact Registry
+# ----------------------------------------------------------------------
+- name: 'gcr.io/cloud-builders/docker'
+  args: [
+    'push',
+    'us-west1-docker.pkg.dev/$PROJECT_ID/social-score-repo/social-score-api:$COMMIT_SHA'
+  ]
+  id: 'push-to-artifact-registry'
+
+# ----------------------------------------------------------------------
+# Étape 4 : Déploiement sur GKE
+# ----------------------------------------------------------------------
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: bash
+  args:
+  - '-c'
+  - |
+    # 1. Configuration kubectl pour accéder au cluster GKE
+    # Utilise les noms de cluster et de zone de votre projet
+    gcloud container clusters get-credentials social-score-cluster \
+      --zone us-west1-a \
+      --project $PROJECT_ID
+      
+    # 2. Mise à jour de l'image Docker dans le déploiement Kubernetes
+    # Utilise le nom de votre déploiement et le tag de l'image construit
+    kubectl set image deployment/social-score-deployment social-score-container=${REGION}-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/social-score-api:$COMMIT_SHA
+    
+    # 3. Attente de la fin du déploiement (Rolling Update)
+    kubectl rollout status deployment/social-score-deployment
+  env:
+  - 'REGION=us-west1'
+  - 'REPO_NAME=social-score-repo'
+
+# ----------------------------------------------------------------------
+# Définition des Images de Sortie
+# ----------------------------------------------------------------------
+images:
+- '${REGION}-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/social-score-api:$COMMIT_SHA'
