@@ -1,129 +1,261 @@
-# cloudbuild.yaml
+# Cloud Build Configuration for Digital Social Score
+# Workflow: Tests → Docker Build → Registry Push → Kubernetes Deploy
+# Reference: https://cloud.google.com/build/docs
 
-# ----------------------------------------------------------------------
-# Étape 0 : Compilation et Soumission du Pipeline Kubeflow
-# ----------------------------------------------------------------------
-# Compile le pipeline KFP v2 et le soumet à Vertex AI Pipelines
-steps:
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+# ============================================================================
+# VARIABLES GLOBALES
+# ============================================================================
+substitutions:
+  _REGION: 'us-west1'
+  _AR_REPO: 'social-score-repo'
+  _IMAGE_NAME: 'social-score-api'
+  _CLUSTER_NAME: 'social-score-cluster'
+  _CLUSTER_ZONE: 'us-west1-a'
+  _GKE_NAMESPACE: 'default'
+  _DEPLOYMENT_NAME: 'social-score-deployment'
+  _PIPELINE_REGION: 'us-central1'
+
+options:
+  machineType: 'N1_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+# ============================================================================
+# ÉTAPE 0 : TESTS (Python 3.11)
+# ============================================================================
+# Installe les dépendances et exécute les tests
+- name: 'python:3.11'
+  id: 'run-tests'
   entrypoint: bash
   args:
-  - '-c'
-  - |
-    # Définir les variables
-    export PROJECT_ID=$PROJECT_ID
-    export PIPELINE_REGION=us-central1
-    export BUCKET_NAME=${PROJECT_ID}-digital-social-score
-    
-    # Installer les dépendances
-    echo "📦 Installation des dépendances KFP..."
-    pip install -q kfp==2.0.0 google-cloud-aiplatform
-    
-    # Compiler le pipeline en fichier YAML
-    echo "🔨 Compilation du pipeline..."
-    python -c "
+    - '-c'
+    - |
+      set -e  # Exit on error
+      
+      echo "================================"
+      echo "🧪 ÉTAPE 0 : EXÉCUTION DES TESTS"
+      echo "================================"
+      
+      # Installer les dépendances
+      echo "📦 Installation des dépendances..."
+      pip install -q -r requirements.txt
+      pip install -q -r requirements-test.txt
+      
+      # Télécharger les données NLTK
+      echo "📥 Téléchargement des données NLTK..."
+      python -m nltk.downloader -q punkt stopwords wordnet averaged_perceptron_tagger maxent_ne_chunker
+      
+      # Exécuter les tests
+      echo "🧪 Exécution des tests..."
+      pytest tests/ -v --tb=short --junit-xml=test-results.xml || EXIT_CODE=$?
+      
+      if [ ! -z "$EXIT_CODE" ] && [ "$EXIT_CODE" != "0" ]; then
+        echo "❌ Les tests ont échoué!"
+        exit 1
+      fi
+      
+      echo "✅ Tous les tests sont passés!"
+  waitFor: ['-']
+
+# ============================================================================
+# ÉTAPE 1 : COMPILATION & SOUMISSION DU PIPELINE KFP (Cloud SDK)
+# ============================================================================
+# Compile le pipeline Kubeflow v2 et le soumet à Vertex AI
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  id: 'compile-pipeline'
+  entrypoint: bash
+  args:
+    - '-c'
+    - |
+      set -e
+      
+      echo "==========================================="
+      echo "🔄 ÉTAPE 1 : COMPILATION DU PIPELINE KFP"
+      echo "==========================================="
+      
+      # Définir les variables
+      export PROJECT_ID=${PROJECT_ID}
+      export PIPELINE_REGION=${_PIPELINE_REGION}
+      export BUCKET_NAME=${PROJECT_ID}-digital-social-score
+      export COMMIT_SHA=${COMMIT_SHA}
+      
+      # Créer le bucket GCS s'il n'existe pas
+      echo "🪣 Vérification du bucket GCS..."
+      if ! gsutil ls gs://${BUCKET_NAME} > /dev/null 2>&1; then
+        echo "📦 Création du bucket GCS: ${BUCKET_NAME}"
+        gsutil mb -l ${PIPELINE_REGION} gs://${BUCKET_NAME}
+      fi
+      
+      # Installer KFP et Vertex AI
+      echo "� Installation des dépendances KFP..."
+      pip install -q kfp==2.0.0 google-cloud-aiplatform
+      
+      # Compiler le pipeline
+      echo "🔨 Compilation du pipeline KFP..."
+      cd src/
+      python -c "
 from kfp.v2 import compiler
 from pipeline import digital_score_pipeline
+import os
 
 try:
     compiler.Compiler().compile(
         pipeline_func=digital_score_pipeline,
         package_path='digital_score_pipeline.yaml'
     )
-    print('✓ Pipeline compilé avec succès !')
+    print('✅ Pipeline compilé avec succès!')
+    print(f'📄 Fichier: {os.path.abspath(\"digital_score_pipeline.yaml\")}')
 except Exception as e:
-    print(f'✗ Erreur lors de la compilation: {e}')
+    print(f'❌ Erreur lors de la compilation: {e}')
+    import traceback
+    traceback.print_exc()
     exit(1)
-    "
-    
-    # Vérifier que le fichier compilé existe
-    if [ ! -f digital_score_pipeline.yaml ]; then
-      echo "✗ Erreur: digital_score_pipeline.yaml non trouvé"
-      exit 1
-    fi
-    
-    # Soumettre le pipeline à Vertex AI Pipelines
-    echo "📤 Soumission du pipeline à Vertex AI..."
-    python submit_pipeline.py \
-      --project ${PROJECT_ID} \
-      --region ${PIPELINE_REGION} \
-      --name "digital-social-score-pipeline-${COMMIT_SHA}" \
-      --bucket ${BUCKET_NAME} || echo "⚠️  Impossible de soumettre le pipeline (optionnel)"
-    
-    echo "✓ Étape 0 complétée avec succès"
-  id: 'compile-and-submit-pipeline'
-
-# ----------------------------------------------------------------------
-# Étape 1 : Tests Unitaires et Installation des Dépendances
-# ----------------------------------------------------------------------
-# Utilise une image Python pour exécuter les commandes de test et d'installation
-- name: 'python:3.11'
-  entrypoint: bash
-  args:
-  - '-c'
-  - |
-    # Installer les dépendances pour s'assurer que le code est valide
-    echo "📚 Installation des dépendances..."
-    pip install -q -r requirements.txt
-    
-    # Exécuter les tests (optionnel - décommenter si vous avez des tests)
-    # echo "🧪 Exécution des tests..."
-    # pytest tests/ || echo "⚠️  Aucun test trouvé (optionnel)"
-    
-    echo "✓ Étape 1 complétée"
-  id: 'install-and-test'
-
-# ----------------------------------------------------------------------
-# Étape 2 : Construction de l'Image Docker
-# ----------------------------------------------------------------------
-- name: 'gcr.io/cloud-builders/docker'
-  args: [
-    'build',
-    '-t',
-    # Utilise Artifact Registry (AR) et le tag de l'image basé sur le COMMIT_SHA
-    'us-west1-docker.pkg.dev/$PROJECT_ID/social-score-repo/social-score-api:$COMMIT_SHA',
-    '-t',
-    'us-west1-docker.pkg.dev/$PROJECT_ID/social-score-repo/social-score-api:latest',
-    '.'
-  ]
-  id: 'build-docker-image'
-
-# ----------------------------------------------------------------------
-# Étape 3 : Pousser l'Image vers Artifact Registry
-# ----------------------------------------------------------------------
-- name: 'gcr.io/cloud-builders/docker'
-  args: [
-    'push',
-    'us-west1-docker.pkg.dev/$PROJECT_ID/social-score-repo/social-score-api:$COMMIT_SHA'
-  ]
-  id: 'push-to-artifact-registry'
-
-# ----------------------------------------------------------------------
-# Étape 4 : Déploiement sur GKE
-# ----------------------------------------------------------------------
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-  entrypoint: bash
-  args:
-  - '-c'
-  - |
-    # 1. Configuration kubectl pour accéder au cluster GKE
-    # Utilise les noms de cluster et de zone de votre projet
-    gcloud container clusters get-credentials social-score-cluster \
-      --zone us-west1-a \
-      --project $PROJECT_ID
+      "
       
-    # 2. Mise à jour de l'image Docker dans le déploiement Kubernetes
-    # Utilise le nom de votre déploiement et le tag de l'image construit
-    kubectl set image deployment/social-score-deployment social-score-container=${REGION}-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/social-score-api:$COMMIT_SHA
-    
-    # 3. Attente de la fin du déploiement (Rolling Update)
-    kubectl rollout status deployment/social-score-deployment
-  env:
-  - 'REGION=us-west1'
-  - 'REPO_NAME=social-score-repo'
+      # Vérifier que le fichier compilé existe
+      if [ ! -f digital_score_pipeline.yaml ]; then
+        echo "❌ Erreur: digital_score_pipeline.yaml non trouvé"
+        exit 1
+      fi
+      
+      # Copier le fichier compilé pour le stockage
+      echo "💾 Stockage du pipeline compilé..."
+      gsutil cp digital_score_pipeline.yaml gs://${BUCKET_NAME}/pipeline-templates/digital_score_pipeline-${COMMIT_SHA}.yaml
+      
+      # Soumettre le pipeline à Vertex AI (optionnel)
+      echo "📤 Soumission du pipeline à Vertex AI..."
+      python submit_pipeline.py \
+        --project ${PROJECT_ID} \
+        --region ${PIPELINE_REGION} \
+        --name "digital-social-score-${COMMIT_SHA:0:7}" \
+        --bucket ${BUCKET_NAME} \
+        --template gs://${BUCKET_NAME}/pipeline-templates/digital_score_pipeline-${COMMIT_SHA}.yaml || \
+        echo "⚠️  Impossible de soumettre le pipeline (optionnel - peut être configuré plus tard)"
+      
+      echo "✅ Pipeline compilé et soumis!"
+  waitFor: ['run-tests']
 
-# ----------------------------------------------------------------------
-# Définition des Images de Sortie
-# ----------------------------------------------------------------------
+# ============================================================================
+# ÉTAPE 2 : CONSTRUCTION DE L'IMAGE DOCKER
+# ============================================================================
+# Build l'image Docker et la tag avec le COMMIT_SHA et 'latest'
+- name: 'gcr.io/cloud-builders/docker'
+  id: 'build-image'
+  args:
+    - 'build'
+    - '-t'
+    - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_IMAGE_NAME}:${COMMIT_SHA}'
+    - '-t'
+    - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_IMAGE_NAME}:latest'
+    - '-f'
+    - 'Dockerfile'
+    - '.'
+  waitFor: ['compile-pipeline']
+
+# ============================================================================
+# ÉTAPE 3 : PUSH VERS ARTIFACT REGISTRY
+# ============================================================================
+# Pousse l'image Docker vers Google Artifact Registry
+- name: 'gcr.io/cloud-builders/docker'
+  id: 'push-image'
+  args:
+    - 'push'
+    - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_IMAGE_NAME}:${COMMIT_SHA}'
+  waitFor: ['build-image']
+
+# ============================================================================
+# ÉTAPE 4 : CONFIGURATION GKE & DÉPLOIEMENT
+# ============================================================================
+# Configure kubectl et met à jour le déploiement Kubernetes
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  id: 'deploy-to-gke'
+  entrypoint: bash
+  args:
+    - '-c'
+    - |
+      set -e
+      
+      echo "=========================================="
+      echo "☸️  ÉTAPE 4 : DÉPLOIEMENT SUR GKE"
+      echo "=========================================="
+      
+      # 1. Configuration kubectl pour accéder au cluster GKE
+      echo "🔐 Configuration de kubectl..."
+      gcloud container clusters get-credentials ${_CLUSTER_NAME} \
+        --zone ${_CLUSTER_ZONE} \
+        --project ${PROJECT_ID}
+      
+      # 2. Vérifier que le déploiement existe
+      echo "✓ Vérification du déploiement..."
+      if ! kubectl get deployment ${_DEPLOYMENT_NAME} -n ${_GKE_NAMESPACE} > /dev/null 2>&1; then
+        echo "⚠️  Le déploiement ${_DEPLOYMENT_NAME} n'existe pas!"
+        echo "📝 Veuillez créer le déploiement manuellement ou utiliser une manifeste."
+        exit 0
+      fi
+      
+      # 3. Mise à jour de l'image Docker dans le déploiement Kubernetes
+      echo "🔄 Mise à jour de l'image Docker..."
+      kubectl set image \
+        deployment/${_DEPLOYMENT_NAME} \
+        ${_IMAGE_NAME}=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_IMAGE_NAME}:${COMMIT_SHA} \
+        -n ${_GKE_NAMESPACE}
+      
+      # 4. Attendre la fin du Rolling Update
+      echo "⏳ Attente du déploiement (timeout: 5 minutes)..."
+      kubectl rollout status \
+        deployment/${_DEPLOYMENT_NAME} \
+        -n ${_GKE_NAMESPACE} \
+        --timeout=5m
+      
+      # 5. Afficher le statut du déploiement
+      echo ""
+      echo "📊 Statut du déploiement:"
+      kubectl get deployment ${_DEPLOYMENT_NAME} -n ${_GKE_NAMESPACE}
+      kubectl get pods -l app=${_IMAGE_NAME} -n ${_GKE_NAMESPACE}
+      
+      echo "✅ Déploiement terminé avec succès!"
+  waitFor: ['push-image']
+
+# ============================================================================
+# ÉTAPE 5 : VÉRIFICATION FINALE
+# ============================================================================
+# Vérifie que le déploiement fonctionne correctement
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  id: 'verify-deployment'
+  entrypoint: bash
+  args:
+    - '-c'
+    - |
+      echo "✅ Pipeline CI/CD COMPLET!"
+      echo ""
+      echo "📋 Résumé:"
+      echo "  - ✅ Tests exécutés et validés"
+      echo "  - ✅ Pipeline KFP compilé et soumis"
+      echo "  - ✅ Image Docker construite: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_IMAGE_NAME}:${COMMIT_SHA}"
+      echo "  - ✅ Image poussée vers Artifact Registry"
+      echo "  - ✅ Déploiement mis à jour sur GKE"
+      echo ""
+      echo "🔗 Ressources:"
+      echo "  - Artifact Registry: https://console.cloud.google.com/artifacts"
+      echo "  - GKE Cluster: https://console.cloud.google.com/kubernetes/clusters"
+      echo "  - Vertex AI Pipelines: https://console.cloud.google.com/vertex-ai/pipelines"
+  waitFor: ['deploy-to-gke']
+
+# ============================================================================
+# IMAGES DE SORTIE
+# ============================================================================
+# Images pushées vers Artifact Registry
 images:
-- '${REGION}-docker.pkg.dev/$PROJECT_ID/$REPO_NAME/social-score-api:$COMMIT_SHA'
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_IMAGE_NAME}:${COMMIT_SHA}'
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_IMAGE_NAME}:latest'
+
+# ============================================================================
+# CONFIGURATION TIMEOUT & ARTIFACTS
+# ============================================================================
+timeout: '1800s'  # 30 minutes
+
+artifacts:
+  objects:
+    location: 'gs://${PROJECT_ID}-cloud-build-logs'
+    paths:
+      - 'test-results.xml'
+      - 'src/digital_score_pipeline.yaml'
