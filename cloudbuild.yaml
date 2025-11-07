@@ -1,0 +1,98 @@
+steps:
+  # Étape 0: Tests
+  - name: python:3.11
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        echo "📋 Étape 0: Exécution des tests..."
+        pip install -r requirements.txt
+        pytest tests/ -v --tb=short
+        echo "✅ Tests réussis!"
+
+  # Étape 1: Construction Docker
+  - name: 'gcr.io/cloud-builders/docker'
+    args: 
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/digital-social-score:$COMMIT_SHA'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/digital-social-score:latest'
+      - '.'
+
+  # Étape 2: Push vers Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: 
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/digital-social-score:$COMMIT_SHA'
+
+  # Étape 3: Compilation du Pipeline Kubeflow (SYNCHRONE)
+  - name: python:3.11
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        echo "🔨 Étape 3: Compilation du pipeline Kubeflow..."
+        pip install kfp==2.0.0 google-cloud-aiplatform
+        python src/trigger_pippeline.py \
+          --project $PROJECT_ID \
+          --region europe-west1 \
+          --compile-only
+        echo "✅ Pipeline compilé!"
+
+  # Étape 4: Soumission du Pipeline à Vertex AI (ASYNCHRONE)
+  - name: python:3.11
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        echo "🚀 Étape 4: Soumission asynchrone du pipeline à Vertex AI..."
+        pip install kfp==2.0.0 google-cloud-aiplatform
+        python src/submit_vertex_pipeline.py \
+          --project $PROJECT_ID \
+          --region europe-west1 \
+          --yaml digital_score_pipeline.yaml \
+          --display-name "Digital-Social-Score-Pipeline-$COMMIT_SHA" \
+          --async
+        echo "✅ Pipeline soumis (mode asynchrone)!"
+        echo "📊 Consultez l'état du pipeline sur:"
+        echo "   https://console.cloud.google.com/vertex-ai/pipelines/runs"
+
+  # Étape 5: Déploiement sur GKE (n'attend pas le pipeline)
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        echo "📦 Étape 5: Déploiement sur GKE..."
+        
+        # Configuration kubectl
+        gcloud container clusters get-credentials social-score-cluster \
+          --zone europe-west1-b \
+          --project $PROJECT_ID
+        
+        # Créer namespace si nécessaire
+        kubectl get namespace production || kubectl create namespace production
+        
+        # Mise à jour de l'image
+        kubectl set image deployment/social-score-api \
+          social-score-api=gcr.io/$PROJECT_ID/digital-social-score:$COMMIT_SHA \
+          -n production
+        
+        # Attendre le déploiement
+        kubectl rollout status deployment/social-score-api \
+          -n production \
+          --timeout=5m
+        
+        echo "✅ Déploiement GKE réussi!"
+
+images:
+  - 'gcr.io/$PROJECT_ID/digital-social-score:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/digital-social-score:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'N1_HIGHCPU_8'
+  substitutionOption: 'ALLOW_LOOSE'
+
+timeout: '1800s'
