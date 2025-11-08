@@ -4,7 +4,6 @@ import re
 import nltk
 # Indique à NLTK où chercher les données téléchargées dans le Dockerfile
 nltk.data.path.append("/usr/share/nltk_data")
-import joblib
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from nltk import pos_tag, ne_chunk
@@ -12,10 +11,13 @@ from nltk.tokenize import word_tokenize
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+# Configuration centralisée
+from config import config
+
 # --- 1. Chargement du Modèle et du Vectoriseur ---
 
-MODEL_PATH = 'model.joblib'
-VECTORIZER_PATH = 'vectorizer.joblib'
+MODEL_PATH = config.get_model_path()
+VECTORIZER_PATH = config.get_vectorizer_path()
 
 try:
     # Charger le modèle et le vectoriseur
@@ -29,19 +31,19 @@ except FileNotFoundError:
 
 # --- 2. Fonctions de Traitement (Copie de train.py) ---
 
-# Regex patterns for common PII
-EMAIL_RE = re.compile(r'\b[\w\.-]+@[\w\.-]+\.\w{2,}\b', flags=re.IGNORECASE)
-PHONE_RE = re.compile(r'(?:\+?\d{1,3}[\s.-])?(?:\(?\d{2,4}\)?[\s.-])?[\d\s.-]{6,15}')
-CREDIT_RE = re.compile(r'\b(?:\d[ -]*?){13,16}\b')
-DATE_RE = re.compile(r'\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{2,4})\b', flags=re.IGNORECASE)
-AGE_RE = re.compile(r'\b(?:age\s*[:]?\s*\d{1,3}|\d{1,3}\s?(?:years?\sold|yo|y/o|yrs|ans))\b', flags=re.IGNORECASE)
-ADDRESS_RE = re.compile(r'\b\d{1,5}\s+(?:[\w\s]{1,60}?)\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Way|Court|Ct|Square|Sq)\b', flags=re.IGNORECASE)
+# Utilisation des patterns d'anonymisation de la configuration centralisée
+EMAIL_RE = config.EMAIL_RE
+PHONE_RE = config.PHONE_RE
+CREDIT_RE = config.CREDIT_RE
+DATE_RE = config.DATE_RE
+AGE_RE = config.AGE_RE
+ADDRESS_RE = config.ADDRESS_RE
 
 def mask_regex_pii(text):
     s = text
     s = EMAIL_RE.sub('<EMAIL>', s)
     s = CREDIT_RE.sub('<CREDIT_CARD>', s)
-    s = PHONE_RE.sub(lambda m: '<PHONE>' if len(re.sub('[^\d]', '', m.group(0))) >= 6 else m.group(0), s)
+    s = PHONE_RE.sub(lambda m: '<PHONE>' if len(re.sub(r'[^\d]', '', m.group(0))) >= 6 else m.group(0), s)
     s = DATE_RE.sub('<DATE>', s)
     s = AGE_RE.sub('<AGE>', s)
     s = ADDRESS_RE.sub('<ADDRESS>', s)
@@ -59,7 +61,7 @@ def mask_named_entities(text):
         if hasattr(subtree, 'label'):
             label = subtree.label()
             ent = ' '.join([tok for tok, pos in subtree.leaves()])
-            if label in ('PERSON', 'GPE', 'LOCATION', 'ORGANIZATION'):
+            if label in config.NAMED_ENTITY_LABELS:
                 try:
                     pattern = re.compile(r'\b' + re.escape(ent) + r'\b', flags=re.IGNORECASE)
                     tag = f'<{label}>' if label != 'PERSON' else '<PERSON>'
@@ -94,8 +96,9 @@ def clean_text_nltk(text):
 # --- 3. Définition de l'API FastAPI ---
 
 app = FastAPI(
-    title="Digital Social Score API",
-    description="API pour la détection de toxicité et l'attribution d'un score social, conforme RGPD."
+    title=config.API_CONFIG['title'],
+    description=config.API_CONFIG['description'],
+    version=config.API_CONFIG['version']
 )
 
 class TextPayload(BaseModel):
@@ -119,12 +122,12 @@ def calculate_score(text: str) -> int:
     # model.predict_proba retourne [[Prob_Non_Toxique, Prob_Toxique]]
     prob_toxic = model.predict_proba(text_vec)[:, 1][0]
     
-    # 5. Conversion en score (0 à 100)
-    # Score = 100 * (1 - Probabilité de Toxicité)
-    # Plus la probabilité de toxicité est faible, plus le score est élevé.
-    score = int(100 * (prob_toxic))
+    # 5. Conversion en score social (0 à 100)
+    # Score = 100 * (1 - Probabilité de Toxicité) 
+    # Plus la probabilité de toxicité est faible, plus le score social est élevé.
+    social_score = int(100 * (1 - prob_toxic))
     
-    return max(0, min(100, score)) # Assurer que le score est entre 0 et 100
+    return max(0, min(100, social_score)) # Assurer que le score est entre 0 et 100
 
 @app.post("/score")
 def get_social_score(payload: TextPayload):

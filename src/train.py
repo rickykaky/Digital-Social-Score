@@ -12,21 +12,24 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 
-# --- 1. Fonctions d'Anonymisation (Basées sur le code utilisateur) ---
+# Configuration centralisée
+from config import config
 
-# Regex patterns for common PII
-EMAIL_RE = re.compile(r'\b[-]+@[-]+\.{2,}', flags=re.IGNORECASE)
-PHONE_RE = re.compile(r'(?:\+?\d{1,3}[.-])?(?:\(?\d{2,4}\)?[.-])?[\d.-]{6,15}')
-CREDIT_RE = re.compile(r'\b(?:\d[ -]*?){13,16}\b')
-DATE_RE = re.compile(r'\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+\d{2,4})\b', flags=re.IGNORECASE)
-AGE_RE = re.compile(r'\b(?:age\s*[:]?\s*\d{1,3}|\d{1,3}\s?(?:years?\sold|yo|y/o|yrs|ans))\b', flags=re.IGNORECASE)
-ADDRESS_RE = re.compile(r'\b\d{1,5}\s+(?:[\w\s]{1,60}?)\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Way|Court|Ct|Square|Sq)\b', flags=re.IGNORECASE)
+# --- 1. Fonctions d'Anonymisation (Basées sur la configuration) ---
+
+# Utilisation des patterns d'anonymisation de la configuration centralisée
+EMAIL_RE = config.EMAIL_RE
+PHONE_RE = config.PHONE_RE
+CREDIT_RE = config.CREDIT_RE
+DATE_RE = config.DATE_RE
+AGE_RE = config.AGE_RE
+ADDRESS_RE = config.ADDRESS_RE
 
 def mask_regex_pii(text):
     s = text
     s = EMAIL_RE.sub('<EMAIL>', s)
     s = CREDIT_RE.sub('<CREDIT_CARD>', s)
-    s = PHONE_RE.sub(lambda m: '<PHONE>' if len(re.sub('[^\d]', '', m.group(0))) >= 6 else m.group(0), s)
+    s = PHONE_RE.sub(lambda m: '<PHONE>' if len(re.sub(r'[^\d]', '', m.group(0))) >= 6 else m.group(0), s)
     s = DATE_RE.sub('<DATE>', s)
     s = AGE_RE.sub('<AGE>', s)
     s = ADDRESS_RE.sub('<ADDRESS>', s)
@@ -44,7 +47,7 @@ def mask_named_entities(text):
         if hasattr(subtree, 'label'):
             label = subtree.label()
             ent = ' '.join([tok for tok, pos in subtree.leaves()])
-            if label in ('PERSON', 'GPE', 'LOCATION', 'ORGANIZATION'):
+            if label in config.NAMED_ENTITY_LABELS:
                 try:
                     pattern = re.compile(r'\b' + re.escape(ent) + r'\b', flags=re.IGNORECASE)
                     tag = f'<{label}>' if label != 'PERSON' else '<PERSON>'
@@ -81,29 +84,51 @@ def clean_text_nltk(text):
 
 # --- 3. Fonction Principale d'Entraînement ---
 
-def train_and_save_model(file_path='train.csv'):
+def train_and_save_model(file_path='../data/prod.csv'):
     print("--- Démarrage de l'entraînement du modèle ---")
     
     # 1. Chargement et préparation des données
     df = pd.read_csv(file_path)
-    df = df.dropna(subset=["anonymized_comment"])
-    df = df[df["anonymized_comment"].str.strip() != ""]
     
-    # Pour ce TP, nous nous concentrons sur la toxicité binaire (toxic=1 vs non-toxic=0)
-    # Si le TP exige un score global, il faut combiner les colonnes de toxicité.
-    # Ici, nous utilisons la colonne 'toxic' comme cible binaire.
-    y = df['toxic']
+    # Détecter automatiquement la colonne de texte
+    text_column = None
+    for col in ['comment_text', 'anonymized_comment', 'text']:
+        if col in df.columns:
+            text_column = col
+            break
+    
+    if text_column is None:
+        raise ValueError("Aucune colonne de texte trouvée dans les données. Colonnes attendues: 'comment_text', 'anonymized_comment', 'text'")
+    
+    print(f"Utilisation de la colonne de texte: {text_column}")
+    df = df.dropna(subset=[text_column])
+    df = df[df[text_column].str.strip() != ""]
+    
+    # Calcul d'un score de toxicité composite basé sur toutes les colonnes disponibles
+    available_columns = config.get_available_toxicity_columns(df.columns.tolist())
+    
+    if available_columns:
+        print(f"Utilisation des colonnes de toxicité: {available_columns}")
+        # Score composite: au moins une colonne de toxicité = 1
+        y = df[available_columns].max(axis=1)
+    else:
+        # Fallback sur la colonne 'toxic' si disponible
+        if 'toxic' in df.columns:
+            y = df['toxic']
+        else:
+            raise ValueError("Aucune colonne de toxicité trouvée dans les données")
     
     print(f"Nombre de commentaires à traiter: {len(df)}")
     
+
+    
     # 2. Anonymisation (Étape RGPD)
     print("Application de l'anonymisation (RGPD)...")
-    #df['comment_text_anonymise'] = df['anonymized_comment'].apply(anonymize_text)
+    df['text_anonymized'] = df[text_column].apply(anonymize_text)
     
     # 3. Nettoyage NLTK
     print("Application du nettoyage NLTK...")
-    #df['comment_text_clean'] = df['comment_text_anonymise'].apply(clean_text_nltk)
-    df['comment_text_clean'] = df['anonymized_comment'].apply(clean_text_nltk)
+    df['comment_text_clean'] = df['text_anonymized'].apply(clean_text_nltk)
     
     # 4. Vectorisation (TF-IDF)
     print("Vectorisation TF-IDF...")
@@ -111,13 +136,25 @@ def train_and_save_model(file_path='train.csv'):
         df['comment_text_clean'], y, test_size=0.3, random_state=42
     )
     
-    vectorizer = TfidfVectorizer(max_features=10000) # Limiter les features pour la performance
+    # Ajuster les paramètres selon la taille du dataset
+    min_df = min(config.MIN_DF, len(X_train) // 10) if len(X_train) > 10 else 1
+    max_features = min(config.MAX_FEATURES, len(X_train) * 100)
+    
+    vectorizer = TfidfVectorizer(
+        max_features=max_features,
+        min_df=min_df,
+        max_df=config.MAX_DF
+    )
     X_train_vec = vectorizer.fit_transform(X_train)
     X_test_vec = vectorizer.transform(X_test)
     
     # 5. Entraînement du Modèle (Régression Logistique)
     print("Entraînement du modèle de Régression Logistique...")
-    model = LogisticRegression(solver='liblinear', random_state=42)
+    model = LogisticRegression(
+        solver='liblinear',
+        random_state=42,
+        max_iter=1000
+    )
     model.fit(X_train_vec, y_train)
     
     # 6. Évaluation
@@ -127,9 +164,16 @@ def train_and_save_model(file_path='train.csv'):
     
     # 7. Sauvegarde du Modèle et du Vectoriseur
     print("Sauvegarde du modèle et du vectoriseur...")
-    joblib.dump(model, 'model.joblib')
-    joblib.dump(vectorizer, 'vectorizer.joblib')
-    print("Modèle et vectoriseur sauvegardés sous 'model.joblib' et 'vectorizer.joblib'.")
+    model_path = config.get_model_path()
+    vectorizer_path = config.get_vectorizer_path()
+    
+    # Créer le dossier s'il n'existe pas
+    model_path.parent.mkdir(exist_ok=True, parents=True)
+    
+    joblib.dump(model, model_path)
+    joblib.dump(vectorizer, vectorizer_path)
+    print(f"Modèle sauvegardé sous '{model_path}'")
+    print(f"Vectoriseur sauvegardé sous '{vectorizer_path}'")
 
 if __name__ == '__main__':
     print("Les ressources NLTK sont supposées être pré-téléchargées. Lancement de l'entraînement...")

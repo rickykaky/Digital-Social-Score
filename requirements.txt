@@ -28,3 +28,6 @@ aiofiles==23.2.1
 jinja2==3.1.2
 markupsafe==2.1.3
 tqdm==4.66.1
+# spaCy is more robust for NER, but the user's code uses NLTK's NE chunker.
+# We will stick to the user's NLTK approach for consistency, but keep the option open.
+# If NLTK NE chunking proves insufficient, spaCy will be added.

@@ -1,0 +1,6 @@
+id,comment_text,toxic,severe_toxic,obscene,threat,insult,identity_hate
+1,This is great!,0,0,0,0,0,0
+2,"This sucks, terrible!",1,0,1,0,1,0
+3,Normal comment here,0,0,0,0,0,0
+4,You are stupid,1,0,1,0,1,0
+5,Nice work everyone,0,0,0,0,0,0
