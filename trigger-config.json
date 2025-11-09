@@ -1,0 +1,14 @@
+{
+  "name": "digital-social-score-main",
+  "description": "Digital Social Score - Build and Deploy",
+  "github": {
+    "owner": "rickykaky",
+    "name": "Digital-Social-Score",
+    "push": {
+      "branch": "^main$"
+    }
+  },
+  "filename": "cloudbuild.yaml",
+  "includedFiles": [],
+  "ignoredFiles": []
+}
