@@ -6,6 +6,8 @@ WORKDIR /app
 
 # Copier les fichiers de dépendances et installer
 COPY requirements.txt .
+# Debug: afficher le contenu pour vérifier
+RUN echo "=== CONTENU requirements.txt ===" && cat requirements.txt && echo "=== FIN ==="
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Télécharger les ressources NLTK nécessaires pour l'exécution de l'API
