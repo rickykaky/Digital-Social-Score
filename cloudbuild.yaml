@@ -23,11 +23,10 @@ steps:
         python scripts/verify_consistency.py || echo "Vérification échouée mais build continue"
         echo "✅ Cohérence vérifiée!"
 
-  # Étape 2: Construction Docker (sans cache)
+  # Étape 2: Construction Docker (avec cache)
   - name: 'gcr.io/cloud-builders/docker'
     args: 
       - 'build'
-      - '--no-cache'
       - '-f'
       - 'src/Dockerfile'
       - '-t'
@@ -117,6 +116,8 @@ options:
   machineType: 'N1_HIGHCPU_8'
   substitutionOption: 'ALLOW_LOOSE'
   # Pas de service_account spécifié pour éviter le conflit
+  # Activation du cache et plus d'espace disque pour améliorer les performances
+  diskSizeGb: 100
 
 timeout: '1800s'
 
