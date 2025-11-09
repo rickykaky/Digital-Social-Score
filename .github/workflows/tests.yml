@@ -42,7 +42,7 @@ jobs:
     
     - name: Upload test results
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: unit-tests-results
         path: reports/junit-unit.xml
@@ -76,7 +76,7 @@ jobs:
     
     - name: Upload test results
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: integration-tests-results
         path: reports/junit-integration.xml
@@ -113,7 +113,7 @@ jobs:
     
     - name: Upload test results
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: pipeline-tests-results
         path: reports/junit-pipeline.xml
@@ -149,7 +149,7 @@ jobs:
       run: pytest tests/ --cov=src --cov-report=xml --cov-report=html
     
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: ./coverage.xml
         flags: unittests
@@ -157,7 +157,7 @@ jobs:
         fail_ci_if_error: false
     
     - name: Archive coverage report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: coverage-report
         path: htmlcov/
@@ -224,7 +224,7 @@ jobs:
     
     - name: Upload mypy results
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: mypy-results
         path: reports/mypy.xml
@@ -257,7 +257,7 @@ jobs:
     
     - name: Upload security results
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: bandit-results
         path: reports/bandit.json
