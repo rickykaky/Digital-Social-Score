@@ -1,25 +1,27 @@
 steps:
-  # Étape 0: Tests
+  # Étape 0: Tests (avec uv pour performance)
   - name: python:3.11
     entrypoint: bash
     args:
       - -c
       - |
         echo "📋 Étape 0: Exécution des tests..."
-        pip install -r requirements.txt
-        pip install -r requirements-test.txt
+        pip install uv
+        uv pip install --system -r requirements.txt
+        uv pip install --system -r requirements-test.txt
         python -m pytest tests/ -v --tb=short || echo "Tests échoués mais build continue"
         echo "✅ Tests terminés!"
 
-  # Étape 1: Vérification de cohérence  
+  # Étape 1: Vérification de cohérence (avec uv pour performance)
   - name: python:3.11
     entrypoint: bash
     args:
       - -c
       - |
         echo "🔍 Étape 1: Vérification de cohérence..."
-        pip install -r requirements.txt
-        pip install -r requirements-test.txt  
+        pip install uv
+        uv pip install --system -r requirements.txt
+        uv pip install --system -r requirements-test.txt  
         python scripts/verify_consistency.py || echo "Vérification échouée mais build continue"
         echo "✅ Cohérence vérifiée!"
 

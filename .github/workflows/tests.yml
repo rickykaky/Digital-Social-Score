@@ -28,11 +28,14 @@ jobs:
         python-version: ${{ env.PYTHON_VERSION }}
         cache: 'pip'
     
-    - name: Install dependencies
+    - name: Install uv (ultra-fast package manager)
+      run: pip install uv
+    
+    - name: Install dependencies with uv (10-100x faster)
       run: |
-        echo "📋 Installation des dépendances..."
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        echo "📋 Installation des dépendances avec uv..."
+        uv pip install --system -r requirements.txt
+        uv pip install --system -r requirements-test.txt
     
     - name: Download NLTK data
       run: |

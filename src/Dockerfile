@@ -4,11 +4,16 @@ FROM python:3.10-slim
 # Définir le répertoire de travail
 WORKDIR /app
 
+# Installer uv (package manager ultra-rapide)
+RUN pip install uv
+
 # Copier les fichiers de dépendances et installer
 COPY requirements.txt .
 # Debug: afficher le contenu pour vérifier
 RUN echo "=== CONTENU requirements.txt ===" && cat requirements.txt && echo "=== FIN ==="
-RUN pip install --no-cache-dir -r requirements.txt
+
+# Installer avec uv (10-100x plus rapide que pip)
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # Télécharger les ressources NLTK nécessaires pour l'exécution de l'API
 # Les ressources sont nécessaires pour l'anonymisation et le nettoyage
