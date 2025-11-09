@@ -1,0 +1,74 @@
+# Dockerfile Multi-Stage avec Cache Optimisé
+# Fichier: src/Dockerfile.optimized
+
+# ============================================================================
+# STAGE 1: Cache de Base uv
+# ============================================================================
+FROM python:3.10-slim as uv-base
+# Ce stage sera mis en cache et réutilisé
+RUN pip install uv
+WORKDIR /app
+
+# ============================================================================
+# STAGE 2: Cache des Dépendances
+# ============================================================================
+FROM uv-base as dependencies
+# Copier seulement les fichiers de requirements pour optimiser le cache Docker
+COPY requirements.txt requirements-test.txt ./
+
+# Installation avec uv (sera mise en cache tant que requirements.txt ne change pas)
+RUN echo "📦 Installation des dépendances avec uv (cache layer)..." && \
+    uv pip install --system --no-cache -r requirements.txt && \
+    echo "✅ Dépendances installées"
+
+# ============================================================================
+# STAGE 3: Cache NLTK (Très Lourd - 200MB+)
+# ============================================================================
+FROM dependencies as nltk-cache
+# Cette étape est TRÈS coûteuse, donc on la met en cache séparément
+RUN echo "📥 Téléchargement des données NLTK (cache layer)..." && \
+    mkdir -p /usr/share/nltk_data && \
+    python -m nltk.downloader -d /usr/share/nltk_data \
+      punkt punkt_tab averaged_perceptron_tagger \
+      maxent_ne_chunker words wordnet stopwords vader_lexicon && \
+    echo "✅ NLTK data téléchargé et mis en cache"
+
+# ============================================================================
+# STAGE 4: Application Finale (Léger - seulement le code)
+# ============================================================================
+FROM nltk-cache as final
+# Ajouter utilisateur non-root
+RUN adduser --disabled-password --gecos "" appuser
+
+# Copier le code application (changements fréquents = pas de cache)
+COPY --chown=appuser:appuser . .
+
+# Passer à l'utilisateur non-root
+USER appuser
+
+# Variables d'environnement
+ENV PORT=8080
+ENV PYTHONPATH=/app/src
+
+# Exposer le port
+EXPOSE 8080
+
+# Healthcheck pour Kubernetes
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost:8080/health || exit 1
+
+# Commande de démarrage
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
+
+# ============================================================================
+# AVANTAGES DE CETTE APPROCHE:
+# ============================================================================
+# 1. uv-base: Mis en cache tant que Python 3.10 ne change pas
+# 2. dependencies: Mis en cache tant que requirements.txt ne change pas  
+# 3. nltk-cache: Mis en cache tant que la liste NLTK ne change pas (rare)
+# 4. final: Seul le code app change → build ultra-rapide
+#
+# PERFORMANCE:
+# - Premier build: ~5-8 minutes (téléchargement NLTK)
+# - Builds suivants: 10-30 secondes (tout en cache)
+# - Changement code: 5-10 secondes (seul stage final rebuild)
