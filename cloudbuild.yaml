@@ -12,7 +12,7 @@ steps:
         echo "✅ Tests terminés!"
 
   # Étape 1: Vérification de cohérence  
-  - name: python:3.11
+  - name: python:2.3
     entrypoint: bash
     args:
       - -c
