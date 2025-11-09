@@ -10,7 +10,7 @@ kfp==2.5.0
 # ❌ SUPPRIMER: kfp.v2
 google-cloud-aiplatform==1.38.1
 google-cloud-storage==2.10.0
-google-cloud-secretmanager==2.18.1
+google-cloud-secret-manager==2.20.0
 transformers==4.36.0
 torch==2.1.1
 datasets==2.15.0
