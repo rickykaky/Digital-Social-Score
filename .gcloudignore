@@ -1,0 +1,96 @@
+# .gcloudignore - Exclut les fichiers du build Cloud Build
+# Plus d'infos: https://cloud.google.com/build/docs/gcloudignore
+
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Jupyter
+.ipynb_checkpoints
+
+# Documentation
+docs/_build/
+
+# Large data files (ne pas uploader dans Cloud Build)
+*.csv
+!requirements*.txt
+data/
+notebooks/
+test_dataset/
+test_charge/
+files/
+
+# Build artifacts
+*.log
+models/*.joblib
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# IDE specific
+*.sublime-project
+*.sublime-workspace

@@ -7,6 +7,7 @@ steps:
       - |
         echo "📋 Étape 0: Exécution des tests..."
         pip install -r requirements.txt
+        pip install -r requirements-test.txt
         python -m pytest tests/ -v --tb=short || echo "Tests échoués mais build continue"
         echo "✅ Tests terminés!"
 
@@ -18,6 +19,7 @@ steps:
       - |
         echo "🔍 Étape 1: Vérification de cohérence..."
         pip install -r requirements.txt
+        pip install -r requirements-test.txt  
         python scripts/verify_consistency.py || echo "Vérification échouée mais build continue"
         echo "✅ Cohérence vérifiée!"
 
