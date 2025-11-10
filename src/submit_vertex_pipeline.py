@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 def submit_vertex_pipeline_async(
     project_id: str,
-    region: str = "europe-west1",
+    region: str = "us-west1",
     pipeline_yaml: str = "digital_score_pipeline.yaml",
     display_name: str = "Digital-Social-Score-Pipeline",
     pipeline_root: str = "gs://digital-social-score/pipeline-root",
