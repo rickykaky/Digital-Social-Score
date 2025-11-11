@@ -107,17 +107,40 @@ steps:
         fi
         
         # Vérifier que le modèle a été créé
-        if [ -f "models/model.joblib" ] && [ -f "models/vectorizer.joblib" ]; then
-          echo "✅ Modèle entraîné avec succès!"
+        echo "🔍 Vérification des modèles créés..."
+        echo "Répertoire de travail : $(pwd)"
+        find . -name "*.joblib" -type f 2>/dev/null | head -10 || echo "Aucun fichier .joblib trouvé"
+        
+        # Chercher dans différents emplacements
+        if [ -f "src/models/model.joblib" ] && [ -f "src/models/vectorizer.joblib" ]; then
+          echo "✅ Modèle entraîné avec succès dans src/models/!"
           echo "   📄 Modèle: src/models/model.joblib"
           echo "   📄 Vectoriseur: src/models/vectorizer.joblib"
+          ls -la src/models/
           
-          # Créer l'archive de cache du modèle pour les prochains builds
+          # Créer l'archive de cache du modèle
+          echo "💾 Création du cache modèle..."
+          cd ..
+          tar -czf model-cache-${_CACHE_VERSION}.tar.gz src/models/ || echo "Erreur sauvegarde modèle"
+        elif [ -f "models/model.joblib" ] && [ -f "models/vectorizer.joblib" ]; then
+          echo "✅ Modèle entraîné avec succès dans models/!"
+          echo "   📄 Modèle: models/model.joblib"
+          echo "   📄 Vectoriseur: models/vectorizer.joblib"
+          ls -la models/
+          
+          # Déplacer vers src/models/ pour cohérence
+          mkdir -p src/models/
+          cp models/*.joblib src/models/
+          
           echo "💾 Création du cache modèle..."
           cd ..
           tar -czf model-cache-${_CACHE_VERSION}.tar.gz src/models/ || echo "Erreur sauvegarde modèle"
         else
           echo "❌ ERREUR: Modèle non créé!"
+          echo "Contenu du répertoire de travail:"
+          ls -la
+          echo "Recherche de tous les fichiers .joblib:"
+          find . -name "*.joblib" -type f 2>/dev/null || echo "Aucun fichier .joblib trouvé"
           exit 1
         fi
         

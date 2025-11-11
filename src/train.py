@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 import joblib
 import nltk
@@ -175,16 +176,36 @@ def train_and_save_model(file_path="../data/prod.csv"):
 
     # 7. Sauvegarde du Modèle et du Vectoriseur
     print("Sauvegarde du modèle et du vectoriseur...")
+    
+    # Debug: Afficher les chemins calculés
+    print(f"🔍 Debug - BASE_DIR: {config.BASE_DIR}")
+    print(f"🔍 Debug - MODELS_DIR: {config.MODELS_DIR}")
+    print(f"🔍 Debug - Répertoire courant: {Path.cwd()}")
+    
     model_path = config.get_model_path()
     vectorizer_path = config.get_vectorizer_path()
+    
+    print(f"🔍 Debug - model_path calculé: {model_path}")
+    print(f"🔍 Debug - vectorizer_path calculé: {vectorizer_path}")
 
     # Créer le dossier s'il n'existe pas
+    print(f"🔍 Création du répertoire: {model_path.parent}")
     model_path.parent.mkdir(exist_ok=True, parents=True)
 
+    # Sauvegarde
     joblib.dump(model, model_path)
     joblib.dump(vectorizer, vectorizer_path)
-    print(f"Modèle sauvegardé sous '{model_path}'")
-    print(f"Vectoriseur sauvegardé sous '{vectorizer_path}'")
+    
+    # Vérification immédiate
+    if model_path.exists():
+        print(f"✅ Modèle sauvegardé sous '{model_path}'")
+    else:
+        print(f"❌ Échec sauvegarde modèle vers '{model_path}'")
+        
+    if vectorizer_path.exists():
+        print(f"✅ Vectoriseur sauvegardé sous '{vectorizer_path}'")
+    else:
+        print(f"❌ Échec sauvegarde vectoriseur vers '{vectorizer_path}'")
 
 
 if __name__ == "__main__":

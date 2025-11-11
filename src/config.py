@@ -23,11 +23,29 @@ class Config:
     VERSION = "1.0.0"
     DESCRIPTION = "API de détection de toxicité et score social conforme RGPD"
 
-    # Chemins
-    BASE_DIR = Path(__file__).resolve().parent.parent.parent
+        # Chemins du projet - Détection automatique du contexte
+    @classmethod
+    def _get_base_dir(cls) -> Path:
+        """Détermine le répertoire de base selon le contexte d'exécution."""
+        current_file = Path(__file__).resolve()
+        
+        # Si on est dans src/, le projet est au parent
+        if current_file.parent.name == "src":
+            base_dir = current_file.parent.parent
+        else:
+            # Fallback: chercher le dossier contenant src/
+            base_dir = current_file.parent
+            while base_dir.parent != base_dir:  # Pas la racine
+                if (base_dir / "src").exists():
+                    break
+                base_dir = base_dir.parent
+        
+        return base_dir
+
+    BASE_DIR = _get_base_dir()
     SRC_DIR = BASE_DIR / "src"
     DATA_DIR = BASE_DIR / "data"
-    MODELS_DIR = BASE_DIR / "models"
+    MODELS_DIR = SRC_DIR / "models"  # Utiliser src/models pour cohérence
     LOGS_DIR = BASE_DIR / "logs"
     TESTS_DIR = BASE_DIR / "tests"
 

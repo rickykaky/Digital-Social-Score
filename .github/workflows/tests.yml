@@ -145,11 +145,24 @@ jobs:
         fi
         
         # Vérifier que le modèle a été créé
-        if [ -f "models/model.joblib" ] && [ -f "models/vectorizer.joblib" ]; then
-          echo "✅ Modèle entraîné avec succès!"
+        echo "🔍 Vérification des modèles créés..."
+        echo "Répertoire de travail : $(pwd)"
+        echo "Structure des fichiers :"
+        find . -name "*.joblib" -type f 2>/dev/null || echo "Aucun fichier .joblib trouvé"
+        
+        # Chercher dans différents emplacements possibles
+        if [ -f "src/models/model.joblib" ] && [ -f "src/models/vectorizer.joblib" ]; then
+          echo "✅ Modèle trouvé dans src/models/"
+          ls -la src/models/
+        elif [ -f "models/model.joblib" ] && [ -f "models/vectorizer.joblib" ]; then
+          echo "✅ Modèle trouvé dans models/"
           ls -la models/
         else
-          echo "❌ ERREUR: Modèle non créé!"
+          echo "❌ ERREUR: Modèle non trouvé dans les emplacements attendus!"
+          echo "Contenu du répertoire courant:"
+          ls -la
+          echo "Contenu de src/ (si existe):"
+          ls -la src/ 2>/dev/null || echo "Pas de répertoire src/"
           exit 1
         fi
       continue-on-error: false  # Critique: l'entraînement doit réussir
