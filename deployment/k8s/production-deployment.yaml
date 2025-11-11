@@ -1,0 +1,171 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: social-score-api
+  namespace: production
+  labels:
+    app: social-score-api
+    version: "v1"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: social-score-api
+  template:
+    metadata:
+      labels:
+        app: social-score-api
+        version: "v1"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: social-score-sa
+      securityContext:
+        fsGroup: 2000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: social-score-api
+        image: gcr.io/PROJECT_ID/digital-social-score:latest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: PORT
+          value: "8080"
+        - name: GCP_PROJECT_ID
+          value: "PROJECT_ID"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: PYTHONPATH
+          value: "/app/src"
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 2
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: social-score-service
+  namespace: production
+  labels:
+    app: social-score-api
+spec:
+  type: LoadBalancer
+  selector:
+    app: social-score-api
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  sessionAffinity: None
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: social-score-hpa
+  namespace: production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: social-score-api
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: social-score-sa
+  namespace: production
+  annotations:
+    iam.gke.io/gcp-service-account: "social-score-api@PROJECT_ID.iam.gserviceaccount.com"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: social-score-config
+  namespace: production
+data:
+  config.yaml: |
+    environment: production
+    api:
+      host: "0.0.0.0"
+      port: 8080
+      workers: 4
+    logging:
+      level: INFO
+      format: json
+    model:
+      cache_size: 100
+      batch_size: 32
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: social-score-pdb
+  namespace: production
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: social-score-api
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: social-score-secrets
+  namespace: production
+type: Opaque
+stringData:
+  database-url: "postgresql://user:password@localhost/social_score"
+  api-key: "your-api-key-here"

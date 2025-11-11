@@ -72,7 +72,13 @@ def submit_vertex_pipeline_async(
             parameter_values={
                 "raw_csv_path": "gs://digital-social-score/data/train.csv",
                 "clean_csv_path": "gs://digital-social-score/data/clean.csv",
+                "project_id": project_id,
+                "region": region,
+                "cluster_name": "social-score-cluster",
+                "zone": "us-west1-a",
+                "deploy_threshold": 0.85,
             },
+            enable_caching=True,
         )
         logger.info(f"✅ Job pipeline créé")
     except Exception as e:

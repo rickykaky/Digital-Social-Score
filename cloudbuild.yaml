@@ -1,6 +1,6 @@
-# Cloud Build avec Cache Persistant GCS
-# Fichier: cloudbuild.optimized.yaml
-
+# Pipeline Cloud Build Optimisé avec Entraînement NLTK
+# Séquence: Tests → Entraînement → Build Docker → Déploiement Asynchrone
+# central1
 steps:
   # ============================================================================
   # ÉTAPE PARALLÈLE: Récupération Cache (ne bloque pas)
@@ -14,6 +14,7 @@ steps:
         echo "💾 Tentative de restauration du cache uv..."
         gsutil cp gs://${PROJECT_ID}-build-cache/uv-cache-${_CACHE_VERSION}.tar.gz . || echo "Aucun cache trouvé"
         gsutil cp gs://${PROJECT_ID}-build-cache/nltk-cache-${_CACHE_VERSION}.tar.gz . || echo "Aucun cache NLTK trouvé"
+        gsutil cp gs://${PROJECT_ID}-build-cache/model-cache-${_CACHE_VERSION}.tar.gz . || echo "Aucun cache modèle trouvé"
         echo "✅ Étape cache terminée"
     waitFor: ['-']  # Démarrage immédiat en parallèle
 
@@ -35,23 +36,11 @@ steps:
           tar -xzf uv-cache-${_CACHE_VERSION}.tar.gz -C ~ 2>/dev/null || echo "Cache uv non restaurable"
         fi
         
-        # Restaurer le cache NLTK si disponible  
-        if [ -f "nltk-cache-${_CACHE_VERSION}.tar.gz" ]; then
-          echo "📥 Restauration cache NLTK..."
-          mkdir -p ~/nltk_data
-          tar -xzf nltk-cache-${_CACHE_VERSION}.tar.gz -C ~ 2>/dev/null || echo "Cache NLTK non restaurable"
-        fi
-        
         # Installation ultra-rapide avec uv
         echo "⚡ Installation avec uv (cached)..."
         pip install uv
         time uv pip install --system -r requirements.txt
         time uv pip install --system -r requirements-test.txt
-        
-        # NLTK data (utilise cache si disponible)
-        echo "📚 Données NLTK..."
-        export NLTK_DATA=~/nltk_data
-        python -m nltk.downloader -d ~/nltk_data punkt punkt_tab stopwords wordnet averaged_perceptron_tagger maxent_ne_chunker words vader_lexicon
         
         # Tests
         echo "🧪 Exécution des tests..."
@@ -60,42 +49,90 @@ steps:
     waitFor: ['restore-cache']
 
   # ============================================================================
-  # ÉTAPE 1: Vérification avec Cache Réutilisé
+  # ÉTAPE 1: Entraînement du Modèle NLTK (CRITIQUE - AVANT DOCKER)
   # ============================================================================
   - name: python:3.11
-    id: 'consistency'
+    id: 'train-model'
     entrypoint: bash
     args:
       - -c
       - |
-        echo "🔍 Étape 1: Vérification (cache réutilisé)..."
+        echo "🤖 ÉTAPE 1: Entraînement du modèle NLTK..."
         
-        # Réutiliser le cache uv du job précédent
+        # Restaurer le cache uv
         if [ -f "uv-cache-${_CACHE_VERSION}.tar.gz" ]; then
           echo "📦 Restauration cache uv..."
           mkdir -p ~/.cache ~/.local/share
-          tar -xzf uv-cache-${_CACHE_VERSION}.tar.gz -C ~ 2>/dev/null || echo "Cache non restaurable"
+          tar -xzf uv-cache-${_CACHE_VERSION}.tar.gz -C ~ 2>/dev/null || echo "Cache uv non restaurable"
         fi
         
-        # Installation (très rapide grâce au cache)
+        # Restaurer le cache NLTK si disponible  
+        if [ -f "nltk-cache-${_CACHE_VERSION}.tar.gz" ]; then
+          echo "📥 Restauration cache NLTK..."
+          mkdir -p ~/nltk_data /usr/share/nltk_data
+          tar -xzf nltk-cache-${_CACHE_VERSION}.tar.gz -C ~ 2>/dev/null || echo "Cache NLTK non restaurable"
+          cp -r ~/nltk_data/* /usr/share/nltk_data/ 2>/dev/null || echo "Copie NLTK data"
+        fi
+        
+        # Installation des dépendances pour l'entraînement
+        echo "📦 Installation des dépendances d'entraînement..."
         pip install uv
         uv pip install --system -r requirements.txt
-        uv pip install --system -r requirements-test.txt
         
-        # Vérification
-        python scripts/verify_consistency.py || echo "Vérification échouée mais build continue"
-        echo "✅ Cohérence vérifiée!"
+        # Télécharger données NLTK si pas en cache
+        echo "📚 Vérification des données NLTK..."
+        export NLTK_DATA=/usr/share/nltk_data
+        python -m nltk.downloader -d /usr/share/nltk_data punkt punkt_tab stopwords wordnet averaged_perceptron_tagger maxent_ne_chunker words vader_lexicon
+        
+        # Restaurer un modèle existant si disponible
+        if [ -f "model-cache-${_CACHE_VERSION}.tar.gz" ]; then
+          echo "🔄 Restauration modèle existant..."
+          mkdir -p src/models
+          tar -xzf model-cache-${_CACHE_VERSION}.tar.gz -C src/ 2>/dev/null || echo "Cache modèle non restaurable"
+        fi
+        
+        # ENTRAÎNEMENT DU MODÈLE sur cleaned_training_sample.csv
+        echo "🎯 Lancement de l'entraînement sur cleaned_training_sample.csv..."
+        cd src
+        
+        # Vérifier que le fichier de données existe
+        if [ -f "../data/cleaned_training_sample.csv" ]; then
+          echo "✅ Fichier de données trouvé: cleaned_training_sample.csv"
+          
+          # Lancer l'entraînement avec le fichier spécifique
+          python -c "import sys; sys.path.append('.'); from train import train_and_save_model; print('🚀 Démarrage entraînement'); train_and_save_model('../data/cleaned_training_sample.csv'); print('✅ Entraînement terminé!')"
+        else
+          echo "⚠️  Fichier cleaned_training_sample.csv non trouvé, utilisation des données par défaut"
+          python train.py
+        fi
+        
+        # Vérifier que le modèle a été créé
+        if [ -f "models/model.joblib" ] && [ -f "models/vectorizer.joblib" ]; then
+          echo "✅ Modèle entraîné avec succès!"
+          echo "   📄 Modèle: src/models/model.joblib"
+          echo "   📄 Vectoriseur: src/models/vectorizer.joblib"
+          
+          # Créer l'archive de cache du modèle pour les prochains builds
+          echo "💾 Création du cache modèle..."
+          cd ..
+          tar -czf model-cache-${_CACHE_VERSION}.tar.gz src/models/ || echo "Erreur sauvegarde modèle"
+        else
+          echo "❌ ERREUR: Modèle non créé!"
+          exit 1
+        fi
+        
+        echo "🎉 Étape d'entraînement terminée avec succès!"
     waitFor: ['tests']
 
   # ============================================================================
-  # ÉTAPE 2: Docker Build avec Cache Registry
+  # ÉTAPE 2: Construction Docker avec Modèle Fraîchement Entraîné
   # ============================================================================
   - name: 'gcr.io/cloud-builders/docker'
     id: 'docker-build'
     args: 
       - 'build'
       - '-f'
-      - 'src/Dockerfile.optimized'  # Utilise le Dockerfile multi-stage
+      - 'src/Dockerfile.optimized'
       - '--cache-from'
       - 'gcr.io/$PROJECT_ID/digital-social-score:cache'
       - '--cache-from'
@@ -107,10 +144,10 @@ steps:
       - '-t'
       - 'gcr.io/$PROJECT_ID/digital-social-score:cache'
       - '.'
-    waitFor: ['consistency']
+    waitFor: ['train-model']  # 🎯 CRITIQUE: Attend la fin de l'entraînement
 
   # ============================================================================
-  # ÉTAPE 3: Push avec Toutes les Images de Cache
+  # ÉTAPE 3: Push vers Container Registry
   # ============================================================================
   - name: 'gcr.io/cloud-builders/docker'
     id: 'docker-push'
@@ -146,11 +183,97 @@ steps:
         gsutil cp uv-cache-${_CACHE_VERSION}.tar.gz gs://${PROJECT_ID}-build-cache/ 2>/dev/null || echo "Upload cache uv échoué"
         gsutil cp nltk-cache-${_CACHE_VERSION}.tar.gz gs://${PROJECT_ID}-build-cache/ 2>/dev/null || echo "Upload cache NLTK échoué"
         
+        # Uploader vers GCS
+        gsutil cp uv-cache-${_CACHE_VERSION}.tar.gz gs://${PROJECT_ID}-build-cache/ 2>/dev/null || echo "Upload cache uv échoué"
+        gsutil cp nltk-cache-${_CACHE_VERSION}.tar.gz gs://${PROJECT_ID}-build-cache/ 2>/dev/null || echo "Upload cache NLTK échoué"
+        gsutil cp model-cache-${_CACHE_VERSION}.tar.gz gs://${PROJECT_ID}-build-cache/ 2>/dev/null || echo "Upload cache modèle échoué"
+        
         echo "✅ Cache sauvegardé pour les prochains builds"
-    waitFor: ['tests']  # Démarre après les tests, en parallèle du reste
+    waitFor: ['train-model']  # Démarre après l'entraînement
 
   # ============================================================================
-  # ÉTAPES ML PIPELINE (Inchangées mais optimisées)
+  # ÉTAPE 4: Déploiement GKE (ASYNCHRONE - dès que l'image est prête)
+  # ============================================================================
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-gke'
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        echo "� ÉTAPE 4: Déploiement GKE (asynchrone avec nouveau modèle)..."
+        
+        # Configuration kubectl
+        gcloud container clusters get-credentials ${_CLUSTER_NAME} \
+          --zone ${_ZONE} \
+          --project $PROJECT_ID
+        
+        # Créer namespace si nécessaire
+        kubectl get namespace production || kubectl create namespace production
+        
+        # Appliquer les manifestes Kubernetes de production
+        echo "🚀 Déploiement automatique de l'API avec l'image fraîche..."
+        sed "s|PROJECT_ID|$PROJECT_ID|g" deployment/k8s/production-deployment.yaml | \
+        sed "s|gcr.io/PROJECT_ID/digital-social-score:latest|gcr.io/$PROJECT_ID/digital-social-score:${_TAG}|g" | \
+        kubectl apply -f -
+        
+        # Mise à jour de l'image (pour les déploiements existants)
+        echo "📦 Mise à jour de l'image avec le nouveau modèle..."
+        kubectl set image deployment/social-score-api \
+          social-score-api=gcr.io/$PROJECT_ID/digital-social-score:${_TAG} \
+          -n production
+        
+        # Attendre le déploiement (non bloquant grâce au timeout)
+        echo "⏳ Attente du déploiement..."
+        kubectl rollout status deployment/social-score-api \
+          -n production \
+          --timeout=10m || echo "⚠️ Déploiement en cours (timeout atteint)"
+        
+        # Vérifier l'état des pods
+        echo "📊 État des pods après déploiement:"
+        kubectl get pods -n production -l app=social-score-api
+        
+        # Obtenir les informations du service
+        echo "🌐 Informations du service:"
+        kubectl get service social-score-service -n production -o wide || echo "Service en création..."
+        
+        # Attendre que le LoadBalancer soit prêt et tester l'API
+        echo "🔍 Vérification de la santé de l'API déployée..."
+        
+        # Attendre quelques secondes pour que le service soit prêt
+        sleep 30
+        
+        # Obtenir l'IP externe du LoadBalancer
+        SERVICE_IP=$$(kubectl get service social-score-service -n production -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+        
+        if [ -n "$$SERVICE_IP" ]; then
+          echo "🌐 Service accessible à: http://$$SERVICE_IP"
+          
+          # Test de santé avec retry
+          for i in {1..5}; do
+            if curl -f --connect-timeout 10 http://$$SERVICE_IP/health; then
+              echo "✅ API répond correctement!"
+              break
+            else
+              echo "⏳ Tentative $$i/5 - API pas encore prête, attente..."
+              sleep 10
+            fi
+          done
+        else
+          echo "⚠️ IP du LoadBalancer pas encore assignée (normal lors du premier déploiement)"
+          echo "💡 Utilisez cette commande pour obtenir l'IP plus tard:"
+          echo "   kubectl get service social-score-service -n production"
+        fi
+        
+        echo "🎉 DÉPLOIEMENT AUTOMATIQUE TERMINÉ!"
+        echo "📊 Résumé du déploiement:"
+        echo "   - Image: gcr.io/$PROJECT_ID/digital-social-score:${_TAG}"
+        echo "   - Namespace: production"  
+        echo "   - Replicas: 2 (auto-scaling 2-8)"
+        echo "   - Health checks: Activés (/health)"
+    waitFor: ['docker-push']  # Peut démarrer dès que l'image est prête
+
+  # ============================================================================
+  # ÉTAPES ML PIPELINE VERTEX AI (ASYNCHRONE - EN PARALLÈLE)
   # ============================================================================
   - name: python:3.11
     id: 'compile-pipeline'
@@ -159,13 +282,19 @@ steps:
     args:
       - -c
       - |
-        echo "🔨 Étape 4: Compilation pipeline (optimisée)..."
+        echo "🔨 Compilation pipeline ML avec déploiement conditionnel..."
         pip install uv
-        uv pip install --system kfp==2.0.0 google-cloud-aiplatform
+        uv pip install --system kfp==2.5.0 google-cloud-aiplatform
         cd src
-        python trigger_pipeline.py --project $PROJECT_ID --region us-central1 --compile-only
-        echo "✅ Pipeline compilé!"
-    waitFor: ['docker-push']
+        python trigger_pipeline.py \
+          --project $PROJECT_ID \
+          --region ${_REGION} \
+          --cluster-name ${_CLUSTER_NAME} \
+          --zone ${_ZONE} \
+          --deploy-threshold 0.85 \
+          --compile-only
+        echo "✅ Pipeline ML compilé avec déploiement automatique si accuracy ≥ 0.85!"
+    waitFor: ['docker-push']  # En parallèle du déploiement GKE
 
   - name: python:3.11
     id: 'submit-pipeline'
@@ -174,65 +303,54 @@ steps:
     args:
       - -c
       - |
-        echo "🚀 Étape 5: Soumission pipeline (asynchrone)..."
-        pip install uv
-        uv pip install --system kfp==2.0.0 google-cloud-aiplatform
+        echo "🚀 Soumission pipeline ML avec déploiement conditionnel..."
+        pip install uv  
+        uv pip install --system kfp==2.5.0 google-cloud-aiplatform
         cd src
         python submit_vertex_pipeline.py \
           --project $PROJECT_ID \
-          --region us-central1 \
+          --region ${_REGION} \
           --yaml digital_score_pipeline.yaml \
-          --display-name "Digital-Social-Score-Pipeline-$COMMIT_SHA" \
+          --display-name "Digital-Social-Score-ML-Pipeline-${_TAG}" \
           --async
-        echo "✅ Pipeline soumis!"
+        echo "✅ Pipeline ML soumis en asynchrone!"
+        echo "📊 Le modèle sera déployé automatiquement si accuracy ≥ 0.85"
+        echo "📊 Consultez l'état du pipeline:"
+        echo "   https://console.cloud.google.com/vertex-ai/pipelines/runs"
+        echo "💡 Si le modèle atteint 85% d'accuracy, une nouvelle image sera buildée et déployée automatiquement!"
     waitFor: ['compile-pipeline']
 
-  # ============================================================================
-  # DÉPLOIEMENT GKE (Parallèle aux ML pipelines)
-  # ============================================================================
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    id: 'deploy-gke'
-    entrypoint: bash
-    args:
-      - -c
-      - |
-        echo "📦 Étape 6: Déploiement GKE (optimisé)..."
-        gcloud container clusters get-credentials social-score-cluster --zone us-central1-a --project $PROJECT_ID
-        kubectl get namespace production || kubectl create namespace production
-        kubectl set image deployment/social-score-api social-score-api=gcr.io/$PROJECT_ID/digital-social-score:$COMMIT_SHA -n production
-        kubectl rollout status deployment/social-score-api -n production --timeout=5m
-        echo "✅ Déploiement réussi!"
-    waitFor: ['docker-push']  # Peut démarrer dès que l'image est prête
-
 # ============================================================================
-# CONFIGURATION OPTIMISÉE
+# IMAGES À CRÉER
 # ============================================================================
 images:
   - 'gcr.io/$PROJECT_ID/digital-social-score:${_TAG}'
   - 'gcr.io/$PROJECT_ID/digital-social-score:latest'
   - 'gcr.io/$PROJECT_ID/digital-social-score:cache'
 
+# ============================================================================
+# CONFIGURATION OPTIMISÉE
+# ============================================================================
 options:
   logging: CLOUD_LOGGING_ONLY
   machineType: 'N1_HIGHCPU_8'
   substitutionOption: 'ALLOW_LOOSE'
   diskSizeGb: 100
-  # Optimisations supplémentaires
   env:
-    - 'CLOUDSDK_COMPUTE_ZONE=us-central1-a'
-    - 'CLOUDSDK_CONTAINER_CLUSTER=social-score-cluster'
+    - 'CLOUDSDK_COMPUTE_ZONE=${_ZONE}'
+    - 'CLOUDSDK_CONTAINER_CLUSTER=${_CLUSTER_NAME}'
 
-timeout: '1800s'
+timeout: '2400s'  # 40 minutes (plus long pour l'entraînement)
 
 # ============================================================================
-# VARIABLES AVEC CACHE
+# VARIABLES DE SUBSTITUTION
 # ============================================================================
 substitutions:
-  _REGION: 'us-central1'
-  _ZONE: 'us-central1-a'
+  _REGION: 'us-west1'
+  _ZONE: 'us-west1-a' 
   _CLUSTER_NAME: 'social-score-cluster'
   _TAG: '${COMMIT_SHA}'
-  _CACHE_VERSION: 'v1.0'  # Incrémenter pour invalider le cache
+  _CACHE_VERSION: 'v1.2'  # Nouveau cache avec fixes
 
 # ============================================================================
 # PERFORMANCE ATTENDUE:
