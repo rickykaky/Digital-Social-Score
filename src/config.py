@@ -78,13 +78,14 @@ class Config:
     ENABLE_STOPWORDS_REMOVAL = True
 
     # GCS Configuration
-    GCS_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "")
+    PROJECT_ID = os.getenv("GCP_PROJECT_ID", "digital-social-score")
+    GCS_PROJECT_ID = PROJECT_ID  # Alias pour compatibilité
     GCS_BUCKET_NAME = os.getenv(
-        "GCS_BUCKET_NAME", f"{GCS_PROJECT_ID}-digital-social-score"
+        "GCS_BUCKET_NAME", f"{PROJECT_ID}-digital-social-score"
     )
     GCS_PIPELINE_BUCKET = os.getenv("GCS_PIPELINE_BUCKET", f"gs://{GCS_BUCKET_NAME}")
 
-        # Vertex AI Configuration
+    # Vertex AI Configuration
     VERTEX_AI_PROJECT_ID = os.getenv("VERTEX_AI_PROJECT_ID", PROJECT_ID)
     VERTEX_AI_REGION = os.getenv("VERTEX_AI_REGION", "us-west1")
     VERTEX_AI_PIPELINE_ROOT = os.getenv(
