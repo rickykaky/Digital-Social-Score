@@ -100,7 +100,11 @@ def clean_text_nltk(text):
 # --- 3. Fonction Principale d'Entraînement ---
 
 
-def train_and_save_model(file_path="../data/prod.csv"):
+def train_and_save_model(file_path=None):
+    """Entraîne et sauvegarde le modèle"""
+    # Utiliser le chemin de la configuration si aucun chemin n'est fourni
+    if file_path is None:
+        file_path = config.DATA_DIR / "prod.csv"
     print("--- Démarrage de l'entraînement du modèle ---")
 
     # 1. Chargement et préparation des données

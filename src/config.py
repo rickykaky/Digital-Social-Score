@@ -42,12 +42,19 @@ class Config:
         
         return base_dir
 
-    BASE_DIR = _get_base_dir()
-    SRC_DIR = BASE_DIR / "src"
-    DATA_DIR = BASE_DIR / "data"
-    MODELS_DIR = SRC_DIR / "models"  # Utiliser src/models pour cohérence
-    LOGS_DIR = BASE_DIR / "logs"
-    TESTS_DIR = BASE_DIR / "tests"
+    BASE_DIR = None  # Sera initialisé plus tard
+    
+    @classmethod
+    def _init_paths(cls):
+        """Initialise les chemins après la définition de la classe"""
+        if cls.BASE_DIR is None:
+            cls.BASE_DIR = cls._get_base_dir()
+            cls.SRC_DIR = cls.BASE_DIR / "src"
+            cls.DATA_DIR = cls.BASE_DIR / "data"
+            cls.MODELS_DIR = cls.SRC_DIR / "models"  # Utiliser src/models pour cohérence
+            cls.LOGS_DIR = cls.BASE_DIR / "logs"
+            cls.TESTS_DIR = cls.BASE_DIR / "tests"
+
 
     # Environnement
     ENV = os.getenv("ENVIRONMENT", Environment.DEVELOPMENT.value)
@@ -256,6 +263,9 @@ def get_config(env: str = None) -> Config:
     config_class = configs.get(env, DevelopmentConfig)
     return config_class()
 
+
+# Initialisation des chemins
+Config._init_paths()
 
 # Configuration active
 config = get_config()
