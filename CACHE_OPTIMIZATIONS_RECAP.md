@@ -118,7 +118,7 @@ docker build -f src/Dockerfile.optimized -t digital-social-score:optimized .
 ### Étape 3: Cache Cloud Build (Optionnel mais Recommandé)
 ```bash
 # 1. Configurer le bucket de cache
-./scripts/setup_cache_bucket.sh digital-social-score us-central1
+./scripts/setup_cache_bucket.sh digital-social-score us-west1
 
 # 2. Remplacer cloudbuild.yaml par cloudbuild.optimized.yaml
 mv cloudbuild.yaml cloudbuild.backup.yaml

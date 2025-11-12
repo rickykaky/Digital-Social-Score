@@ -96,7 +96,7 @@ substitutions:
   _CLUSTER_NAME: 'social-score-cluster'
   _CLUSTER_ZONE: 'us-west1-a'
   _DEPLOYMENT_NAME: 'social-score-deployment'
-  _PIPELINE_REGION: 'us-central1'
+  _PIPELINE_REGION: 'us-west1'
 ```
 **Avantages:**
 - ✅ Plus facile à maintenir

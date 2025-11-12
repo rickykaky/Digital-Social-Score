@@ -171,7 +171,7 @@ substitutions:
   _CLUSTER_NAME: 'social-score-cluster'
   _CLUSTER_ZONE: 'us-west1-a'
   _ENVIRONMENT: 'production'
-  _PIPELINE_REGION: 'us-central1'
+  _PIPELINE_REGION: 'us-west1'
 
 options:
   machineType: 'N1_HIGHCPU_8'

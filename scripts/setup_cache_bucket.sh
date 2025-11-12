@@ -4,9 +4,10 @@
 
 set -e
 
+# Configuration par défaut
 PROJECT_ID=${1:-"digital-social-score"}
-REGION=${2:-"us-central1"}
-BUCKET_NAME="${PROJECT_ID}-build-cache"
+REGION=${2:-"us-west1"}
+BUCKET_NAME="${PROJECT_ID}-cache-optimized"
 
 echo "🚀 Configuration du Cache GCS pour Cloud Build"
 echo "=============================================="

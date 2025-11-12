@@ -56,7 +56,7 @@ steps:
         cd src
         python trigger_pipeline.py \
           --project $PROJECT_ID \
-          --region us-central1 \
+          --region us-west1 \
           --compile-only
         echo "✅ Pipeline compilé!"
 
@@ -72,7 +72,7 @@ steps:
         cd src
         python submit_vertex_pipeline.py \
           --project $PROJECT_ID \
-          --region us-central1 \
+          --region us-west1 \
           --yaml digital_score_pipeline.yaml \
           --display-name "Digital-Social-Score-Pipeline-$COMMIT_SHA" \
           --async
@@ -90,7 +90,7 @@ steps:
         
         # Configuration kubectl
         gcloud container clusters get-credentials social-score-cluster \
-          --zone us-central1-a \
+          --zone us-west1-a \
           --project $PROJECT_ID
         
         # Créer namespace si nécessaire
@@ -125,7 +125,7 @@ timeout: '1800s'
 
 # Variables de substitution avec valeurs par défaut
 substitutions:
-  _REGION: 'us-central1'
-  _ZONE: 'us-central1-a'
+  _REGION: 'us-west1'
+  _ZONE: 'us-west1-a'
   _CLUSTER_NAME: 'social-score-cluster'
   _TAG: '${COMMIT_SHA}'

@@ -37,7 +37,7 @@ gcloud builds triggers create github \
   --build-config="cloudbuild.yaml" \
   --description="Digital Social Score - Main Branch" \
   --include-logs-with-status \
-  --region="us-central1"
+  --region="us-west1"
   # IMPORTANT: Ne pas spécifier --service-account
 ```
 
@@ -64,7 +64,7 @@ gcloud builds submit --config cloudbuild.yaml .
 #### Création du déclencheur :
 ```bash
 # Supprimer l'ancien déclencheur s'il existe
-gcloud builds triggers delete [TRIGGER_NAME] --region=us-central1
+gcloud builds triggers delete [TRIGGER_NAME] --region=us-west1
 
 # Créer le nouveau déclencheur
 gcloud builds triggers create github \
@@ -73,14 +73,14 @@ gcloud builds triggers create github \
   --branch-pattern="^main$" \
   --build-config="cloudbuild.yaml" \
   --description="Digital Social Score - Build and Deploy" \
-  --region="us-central1"
+  --region="us-west1"
 ```
 
 ### 📋 Vérifications
 
 1. **Vérifier le déclencheur** :
 ```bash
-gcloud builds triggers list --region=us-central1
+gcloud builds triggers list --region=us-west1
 ```
 
 2. **Vérifier les permissions** :
@@ -90,7 +90,7 @@ gcloud projects get-iam-policy YOUR_PROJECT_ID
 
 3. **Test d'un build manuel** :
 ```bash
-gcloud builds submit --config cloudbuild.yaml --region=us-central1 .
+gcloud builds submit --config cloudbuild.yaml --region=us-west1 .
 ```
 
 ### 🔍 Diagnostic

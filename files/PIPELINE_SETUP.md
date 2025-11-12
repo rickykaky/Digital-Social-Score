@@ -46,7 +46,7 @@ Cloud Build Trigger (git push)
 Dans Cloud Build, définir :
 ```bash
 PROJECT_ID         # Ton ID GCP
-PIPELINE_REGION    # Région (default: us-central1)
+PIPELINE_REGION    # Région (default: us-west1)
 BUCKET_NAME        # ${PROJECT_ID}-digital-social-score
 ```
 
@@ -100,13 +100,13 @@ Cloud Build exécutera automatiquement :
 # Mode 1: Soumettre un pipeline déjà compilé
 python src/submit_pipeline.py \
   --project my-project \
-  --region us-central1 \
+  --region us-west1 \
   --template gs://my-project-digital-social-score/pipeline-templates/digital_score_pipeline.yaml
 
 # Mode 2: Compiler puis soumettre
 python src/submit_pipeline.py \
   --project my-project \
-  --region us-central1 \
+  --region us-west1 \
   --compile
 ```
 
@@ -114,7 +114,7 @@ python src/submit_pipeline.py \
 
 ```bash
 gcloud ai pipelines runs submit \
-  --region=us-central1 \
+  --region=us-west1 \
   --pipeline-root=gs://my-project-digital-social-score/pipeline-root \
   --display-name='Digital-Social-Score-Pipeline' \
   --yaml-pipeline-spec=gs://my-project-digital-social-score/pipeline-templates/digital_score_pipeline.yaml

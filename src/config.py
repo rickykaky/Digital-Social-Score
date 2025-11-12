@@ -84,9 +84,12 @@ class Config:
     )
     GCS_PIPELINE_BUCKET = os.getenv("GCS_PIPELINE_BUCKET", f"gs://{GCS_BUCKET_NAME}")
 
-    # Vertex AI Configuration
-    VERTEX_AI_REGION = os.getenv("VERTEX_AI_REGION", "us-central1")
-    VERTEX_AI_PIPELINE_ROOT = f"gs://{GCS_BUCKET_NAME}/pipeline-root"
+        # Vertex AI Configuration
+    VERTEX_AI_PROJECT_ID = os.getenv("VERTEX_AI_PROJECT_ID", PROJECT_ID)
+    VERTEX_AI_REGION = os.getenv("VERTEX_AI_REGION", "us-west1")
+    VERTEX_AI_PIPELINE_ROOT = os.getenv(
+        "VERTEX_AI_PIPELINE_ROOT", f"gs://{PROJECT_ID}-ml-pipeline/pipeline-root"
+    )
 
     # Database Configuration (optionnel)
     DATABASE_URL = os.getenv("DATABASE_URL", None)

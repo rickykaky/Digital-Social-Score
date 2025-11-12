@@ -34,8 +34,8 @@
 
 6. **Variables de substitution** (optionnel)
    ```
-   _REGION = us-central1
-   _ZONE = us-central1-a
+   _REGION = us-west1
+   _ZONE = us-west1-a
    _CLUSTER_NAME = social-score-cluster
    ```
 

@@ -239,5 +239,5 @@ if __name__ == "__main__":
     print(f"Pipeline compilé: {output_file}")
     print("\nPour exécuter le pipeline:")
     print(
-        f"  gcloud ai pipelines runs submit --region=us-central1 --pipeline-root=gs://digital-social-score/pipeline-root --display-name='Digital Score Pipeline' --yaml-pipeline-spec={output_file}"
+        f"  gcloud ai pipelines runs submit --region=us-west1 --pipeline-root=gs://digital-social-score/pipeline-root --display-name='Digital Score Pipeline' --yaml-pipeline-spec={output_file}"
     )
